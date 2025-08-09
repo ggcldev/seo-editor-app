@@ -1,20 +1,26 @@
 import type { Heading } from '../hooks/useOutline';
 
-type Props = { item: Heading };
+type Props = { 
+  item: Heading;
+  isActive?: boolean;
+};
 
-export function OutlineItem({ item }: Props) {
+export function OutlineItem({ item, isActive = false }: Props) {
   return (
     <div
       style={{
         padding: '4px 6px',
         borderRadius: 8,
         marginLeft: (item.level - 1) * 10,
-        color: '#374151',
+        color: isActive ? '#ffffff' : '#374151',
         fontSize: 13,
-        background: 'transparent',
+        background: isActive ? '#374151' : 'transparent',
         display: 'flex',
         alignItems: 'baseline',
         gap: 4,
+        fontWeight: isActive ? 600 : 400,
+        borderLeft: isActive ? '3px solid #6b7280' : '3px solid transparent',
+        transition: 'all 0.2s ease',
       }}
       title={`H${item.level}`}
     >

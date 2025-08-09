@@ -2,11 +2,12 @@ type Props = {
   markdown: string;
   setMarkdown: (v: string) => void;
   onPasteMarkdown: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  onScroll: (e: React.UIEvent<HTMLTextAreaElement>) => void;
   narrow: boolean;
   toggleNarrow: () => void;
 };
 
-export function Editor({ markdown, setMarkdown, onPasteMarkdown, narrow, toggleNarrow }: Props) {
+export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, narrow, toggleNarrow }: Props) {
   return (
     <main style={{ padding: 0, background: '#f6f6f6', height: '100vh' }}>
       <div style={{ height: '100%', padding: 24, boxSizing: 'border-box', display: 'flex', justifyContent: 'center' }}>
@@ -35,6 +36,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, narrow, toggleN
             value={markdown}
             onChange={(e) => setMarkdown(e.target.value)}
             onPaste={onPasteMarkdown}
+            onScroll={onScroll}
             placeholder=""
             style={{
               width: '100%',
@@ -43,8 +45,8 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, narrow, toggleN
               fontFamily:
                 "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
               fontSize: 14,
-              lineHeight: 1.8, // More line height for better header separation
-              fontWeight: 500, // Slightly bolder text overall
+              lineHeight: 1.8,
+              fontWeight: 500,
               color: '#111827',
               background: '#f6f6f6',
               border: 'none',
@@ -52,6 +54,9 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, narrow, toggleN
               paddingTop: 32,
               outline: 'none',
               boxSizing: 'border-box',
+              scrollBehavior: 'smooth',
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#cbd5e1 #f1f5f9',
             }}
           />
         </div>

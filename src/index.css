@@ -4,12 +4,33 @@ html, body, #root {
   height: 100%;
 }
 
-/* Ensure default text is dark on light background */
 body {
   @apply text-gray-900 bg-gray-100;
 }
 
-/* Tweak prose for our preview */
 .prose {
   @apply max-w-none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+textarea::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+textarea::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  border: 1px solid #f1f5f9;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

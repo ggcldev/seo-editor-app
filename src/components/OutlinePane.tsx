@@ -1,12 +1,24 @@
+import { useEffect, useRef } from 'react';
 import type { Heading } from '../hooks/useOutline';
 import { OutlineItem } from './OutlineItem';
 
 type Props = {
   outline: Heading[];
+  activeHeadingId: string | null;
   onStartResize: () => void;
 };
 
-export function OutlinePane({ outline, onStartResize }: Props) {
+export function OutlinePane({ outline, activeHeadingId, onStartResize }: Props) {
+  const activeItemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      });
+    }
+  }, [activeHeadingId]);
   return (
     <aside style={{ borderRight: '1px solid #e5e7eb', background: '#fff', overflowY: 'auto', position: 'relative' }}>
       <div
@@ -21,7 +33,15 @@ export function OutlinePane({ outline, onStartResize }: Props) {
         <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, marginBottom: 8 }}>Outline</div>
         <div style={{ display: 'grid', gap: 4 }}>
           {outline.map((h, i) => (
-            <OutlineItem key={`${h.id}-${i}`} item={h} />
+            <div 
+              key={`${h.id}-${i}`}
+              ref={h.id === activeHeadingId ? activeItemRef : null}
+            >
+              <OutlineItem 
+                item={h} 
+                isActive={h.id === activeHeadingId}
+              />
+            </div>
           ))}
         </div>
       </div>
