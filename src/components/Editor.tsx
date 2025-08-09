@@ -43,7 +43,8 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, narrow, toggleN
               fontFamily:
                 "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
               fontSize: 14,
-              lineHeight: 1.6,
+              lineHeight: 1.8, // More line height for better header separation
+              fontWeight: 500, // Slightly bolder text overall
               color: '#111827',
               background: '#f6f6f6',
               border: 'none',
