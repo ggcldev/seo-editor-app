@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Heading } from '../hooks/useOutline';
 
 type Props = { item: Heading };
@@ -24,5 +23,3 @@ export function OutlineItem({ item }: Props) {
     </div>
   );
 }
-
-

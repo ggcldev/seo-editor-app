@@ -1,5 +1,3 @@
-import React from 'react';
-
 type Props = {
   markdown: string;
   setMarkdown: (v: string) => void;
@@ -37,7 +35,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, narrow, toggleN
             value={markdown}
             onChange={(e) => setMarkdown(e.target.value)}
             onPaste={onPasteMarkdown}
-            placeholder={''}
+            placeholder=""
             style={{
               width: '100%',
               height: 'calc(100vh - 48px)',
@@ -60,5 +58,3 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, narrow, toggleN
     </main>
   );
 }
-
-

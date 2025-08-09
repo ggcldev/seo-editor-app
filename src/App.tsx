@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutline } from './hooks/useOutline';
 import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { OutlinePane } from './components/OutlinePane';
@@ -19,7 +19,7 @@ export default function App() {
 
   // Editor updates markdown directly via setMarkdown prop
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const html = e.clipboardData?.getData('text/html');
     if (!html) return; // let default plaintext paste occur
 
@@ -43,7 +43,7 @@ export default function App() {
       const pos = (before + md).length;
       el.selectionStart = el.selectionEnd = pos;
     });
-  };
+  }, [htmlToMarkdown]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -60,7 +60,7 @@ export default function App() {
     window.addEventListener('mouseup', onUp, { once: true });
     return () => {
       window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp as any);
+      window.removeEventListener('mouseup', onUp);
     };
   }, [isResizing]);
 
@@ -69,18 +69,16 @@ export default function App() {
       ref={shellRef}
       style={{ display: 'grid', gridTemplateColumns: `${outlineWidth}px 1fr`, height: '100vh' }}
     >
-      <OutlinePane outline={outline} onStartResize={() => setIsResizing(true)} />
+      <OutlinePane outline={outline} onStartResize={useCallback(() => setIsResizing(true), [])} />
 
       <Editor
         markdown={markdown}
         setMarkdown={setMarkdown}
         onPasteMarkdown={handlePaste}
         narrow={narrow}
-        toggleNarrow={() => setNarrow((v) => !v)}
+        toggleNarrow={useCallback(() => setNarrow((v) => !v), [])}
       />
     </div>
   );
 }
-
-// id utility moved to utils/ids.ts for reuse
 

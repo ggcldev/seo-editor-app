@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Heading } from '../hooks/useOutline';
 import { OutlineItem } from './OutlineItem';
 
@@ -29,5 +28,3 @@ export function OutlinePane({ outline, onStartResize }: Props) {
     </aside>
   );
 }
-
-

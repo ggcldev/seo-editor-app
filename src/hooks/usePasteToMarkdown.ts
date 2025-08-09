@@ -5,13 +5,13 @@ export function usePasteToMarkdown() {
   const turndown = useMemo(() => {
     const td = new TurndownService({ headingStyle: 'atx' });
     td.addRule('fontSizeHeadingsPxPt', {
-      filter: (node: any) => {
+      filter: (node: Node) => {
         if (!(node instanceof HTMLElement)) return false;
         if (node.nodeName !== 'P') return false;
         const style = (node as HTMLElement).getAttribute('style') || '';
         return /font-size\s*:\s*\d+(?:\.\d+)?(px|pt)/i.test(style);
       },
-      replacement: (content: string, node: any) => {
+      replacement: (content: string, node: Node) => {
         const style = (node as HTMLElement).getAttribute('style') || '';
         const m = style.match(/font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)/i);
         const value = m ? parseFloat(m[1]) : 0;
@@ -26,15 +26,15 @@ export function usePasteToMarkdown() {
       },
     });
     td.addRule('dropStrong', {
-      filter: (node: any) => node && (node.nodeName === 'STRONG' || node.nodeName === 'B'),
+      filter: (node: Node) => node && (node.nodeName === 'STRONG' || node.nodeName === 'B'),
       replacement: (content: string) => content,
     });
     td.addRule('dropEmphasis', {
-      filter: (node: any) => node && (node.nodeName === 'EM' || node.nodeName === 'I'),
+      filter: (node: Node) => node && (node.nodeName === 'EM' || node.nodeName === 'I'),
       replacement: (content: string) => content,
     });
     td.addRule('dropBoldStyleSpans', {
-      filter: (node: any) => {
+      filter: (node: Node) => {
         if (!(node instanceof HTMLElement)) return false;
         const style = (node as HTMLElement).getAttribute('style') || '';
         return /font-weight\s*:\s*(bold|[6-9]00)/i.test(style);
@@ -53,5 +53,3 @@ export function usePasteToMarkdown() {
 
   return { htmlToMarkdown };
 }
-
-
