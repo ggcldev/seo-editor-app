@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+html, body, #root {
+  height: 100%;
+}
+
+/* Ensure default text is dark on light background */
+body {
+  @apply text-gray-900 bg-gray-100;
+}
+
+/* Tweak prose for our preview */
+.prose {
+  @apply max-w-none;
+}
