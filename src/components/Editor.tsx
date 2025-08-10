@@ -3,7 +3,7 @@ type Props = {
   setMarkdown: (v: string) => void;
   onPasteMarkdown: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   onScroll: (e: React.UIEvent<HTMLTextAreaElement>) => void;
-  onCaretChange: (textarea: HTMLTextAreaElement) => void;
+  onCaretChange: (pos: number) => void;
   narrow: boolean;
   toggleNarrow: () => void;
 };
@@ -74,8 +74,9 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
     onScroll(e);
   }, [onScroll, showScrollbars]);
 
-  const handleCaretEvents = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    onCaretChange(e.currentTarget);
+  const reportCaret = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    onCaretChange(el.selectionStart ?? 0);
   }, [onCaretChange]);
 
   return (
@@ -97,12 +98,11 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
           </button>
           <textarea
             value={markdown}
-            onChange={(e) => setMarkdown(e.target.value)}
+            onChange={(e) => { setMarkdown(e.target.value); onCaretChange(e.currentTarget.selectionStart ?? 0); }}
             onPaste={onPasteMarkdown}
             onScroll={handleScroll}
-            onKeyUp={handleCaretEvents}
-            onClick={handleCaretEvents}
-            onSelect={handleCaretEvents}
+            onKeyUp={reportCaret}
+            onClick={reportCaret}
             style={EDITOR_STYLES.textarea}
           />
           {showScrollbar && (
