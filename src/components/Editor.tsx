@@ -3,17 +3,45 @@ type Props = {
   setMarkdown: (v: string) => void;
   onPasteMarkdown: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   onScroll: (e: React.UIEvent<HTMLTextAreaElement>) => void;
+  onCaretChange: (textarea: HTMLTextAreaElement) => void;
   narrow: boolean;
   toggleNarrow: () => void;
 };
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, narrow, toggleNarrow }: Props) {
+const EDITOR_STYLES = {
+  main: { padding: 0, background: '#f6f6f6', height: '100vh' },
+  container: { height: '100%', padding: 24, boxSizing: 'border-box' as const, display: 'flex', justifyContent: 'center' },
+  wrapper: (narrow: boolean) => ({ position: 'relative' as const, width: '100%', maxWidth: narrow ? 760 : '100%', overflow: 'hidden' }),
+  button: {
+    position: 'absolute' as const, top: 8, right: 8, zIndex: 1, fontSize: 12, padding: '6px 10px',
+    borderRadius: 8, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', cursor: 'pointer'
+  },
+  textarea: {
+    width: '100%', height: 'calc(100vh - 48px)', resize: 'none' as const, border: 'none', padding: 0, paddingTop: 32, outline: 'none',
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+    fontSize: 14, lineHeight: 1.8, fontWeight: 500, color: '#111827', background: '#f6f6f6',
+    boxSizing: 'border-box' as const, scrollBehavior: 'smooth' as const, scrollbarWidth: 'none' as const, msOverflowStyle: 'none' as const
+  },
+  scrollbar: {
+    track: {
+      position: 'fixed' as const, top: 32, right: 8, width: 8, height: 'calc(100vh - 80px)', borderRadius: 4,
+      background: 'rgba(203, 213, 225, 0.3)', pointerEvents: 'none' as const, zIndex: 1000, transition: 'opacity 0.3s ease'
+    },
+    thumb: (position: number, size: number) => ({
+      position: 'absolute' as const, top: `${position}%`, width: '100%', height: `${size}%`,
+      background: '#cbd5e1', borderRadius: 4, transition: 'all 0.1s ease',
+      transform: `translateY(-${position * (size / 100)}%)`
+    })
+  }
+} as const;
+
+export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCaretChange, narrow, toggleNarrow }: Props) {
   const [showScrollbar, setShowScrollbar] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [scrollThumbSize, setScrollThumbSize] = useState(20);
-  const hideTimeoutRef = useRef<number>();
+  const hideTimeoutRef = useRef<number | undefined>(undefined);
 
   const showScrollbars = useCallback(() => {
     setShowScrollbar(true);
@@ -26,7 +54,13 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, narro
     setShowScrollbar(false);
   }, []);
 
-  useEffect(() => () => hideTimeoutRef.current && clearTimeout(hideTimeoutRef.current), []);
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
     showScrollbars();
@@ -40,11 +74,15 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, narro
     onScroll(e);
   }, [onScroll, showScrollbars]);
 
+  const handleCaretEvents = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    onCaretChange(e.currentTarget);
+  }, [onCaretChange]);
+
   return (
-    <main style={{ padding: 0, background: '#f6f6f6', height: '100vh' }}>
-      <div style={{ height: '100%', padding: 24, boxSizing: 'border-box', display: 'flex', justifyContent: 'center' }}>
+    <main style={EDITOR_STYLES.main}>
+      <div style={EDITOR_STYLES.container}>
         <div 
-          style={{ position: 'relative', width: '100%', maxWidth: narrow ? 760 : '100%', overflow: 'hidden' }}
+          style={EDITOR_STYLES.wrapper(narrow)}
           onMouseEnter={showScrollbars}
           onMouseLeave={hideScrollbars}
           onMouseMove={showScrollbars}
@@ -52,10 +90,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, narro
           <button
             type="button"
             onClick={toggleNarrow}
-            style={{
-              position: 'absolute', top: 8, right: 8, zIndex: 1, fontSize: 12, padding: '6px 10px',
-              borderRadius: 8, border: '1px solid #e5e7eb', background: '#ffffff', color: '#374151', cursor: 'pointer',
-            }}
+            style={EDITOR_STYLES.button}
             aria-label={narrow ? 'Switch to full width' : 'Switch to narrow width'}
           >
             {narrow ? 'Full width' : 'Squeeze'}
@@ -65,23 +100,14 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, narro
             onChange={(e) => setMarkdown(e.target.value)}
             onPaste={onPasteMarkdown}
             onScroll={handleScroll}
-            style={{
-              width: '100%', height: 'calc(100vh - 48px)', resize: 'none', border: 'none', padding: 0, paddingTop: 32, outline: 'none',
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-              fontSize: 14, lineHeight: 1.8, fontWeight: 500, color: '#111827', background: '#f6f6f6',
-              boxSizing: 'border-box', scrollBehavior: 'smooth', scrollbarWidth: 'none', msOverflowStyle: 'none',
-            }}
+            onKeyUp={handleCaretEvents}
+            onClick={handleCaretEvents}
+            onSelect={handleCaretEvents}
+            style={EDITOR_STYLES.textarea}
           />
           {showScrollbar && (
-            <div style={{
-              position: 'fixed', top: 32, right: 8, width: 8, height: 'calc(100vh - 80px)', borderRadius: 4,
-              background: 'rgba(203, 213, 225, 0.3)', pointerEvents: 'none', zIndex: 1000, transition: 'opacity 0.3s ease',
-            }}>
-              <div style={{
-                position: 'absolute', top: `${scrollPosition}%`, width: '100%', height: `${scrollThumbSize}%`,
-                background: '#cbd5e1', borderRadius: 4, transition: 'all 0.1s ease',
-                transform: `translateY(-${scrollPosition * (scrollThumbSize / 100)}%)`,
-              }} />
+            <div style={EDITOR_STYLES.scrollbar.track}>
+              <div style={EDITOR_STYLES.scrollbar.thumb(scrollPosition, scrollThumbSize)} />
             </div>
           )}
         </div>

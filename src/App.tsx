@@ -5,18 +5,22 @@ import { useScrollSpy } from './hooks/useScrollSpy';
 import { OutlinePane } from './components/OutlinePane';
 import { Editor } from './components/Editor';
 
+const OUTLINE_CONFIG = {
+  DEFAULT_WIDTH: 260,
+  MIN_WIDTH: 160,
+  MAX_WIDTH: 480
+};
+
 export default function App() {
   const [markdown, setMarkdown] = useState('');
   const [narrow, setNarrow] = useState(false);
-  const [outlineWidth, setOutlineWidth] = useState(260);
+  const [outlineWidth, setOutlineWidth] = useState(OUTLINE_CONFIG.DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
-  const OUTLINE_MIN_PX = 160;
-  const OUTLINE_MAX_PX = 480;
   const { htmlToMarkdown } = usePasteToMarkdown();
 
   const outline = useOutline(markdown);
-  const { activeHeadingId, handleScroll } = useScrollSpy(markdown, outline);
+  const { activeHeadingId, handleScroll, handleCaretChange } = useScrollSpy(markdown, outline);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const html = e.clipboardData?.getData('text/html');
@@ -42,7 +46,7 @@ export default function App() {
       const shell = shellRef.current;
       if (!shell) return;
       const x = e.clientX - shell.getBoundingClientRect().left;
-      setOutlineWidth(Math.min(Math.max(x, OUTLINE_MIN_PX), OUTLINE_MAX_PX));
+      setOutlineWidth(Math.min(Math.max(x, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
     };
     const onUp = () => setIsResizing(false);
     window.addEventListener('mousemove', onMove);
@@ -69,10 +73,10 @@ export default function App() {
         setMarkdown={setMarkdown}
         onPasteMarkdown={handlePaste}
         onScroll={handleScroll}
+        onCaretChange={handleCaretChange}
         narrow={narrow}
         toggleNarrow={useCallback(() => setNarrow((v) => !v), [])}
       />
     </div>
   );
 }
-
