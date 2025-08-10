@@ -27,13 +27,11 @@ export default function App() {
     const el = e.currentTarget;
     const start = el.selectionStart ?? el.value.length;
     const end = el.selectionEnd ?? el.value.length;
-    const before = el.value.slice(0, start);
-    const after = el.value.slice(end);
-    const next = `${before}${md}${after}`;
+    const next = `${el.value.slice(0, start)}${md}${el.value.slice(end)}`;
     setMarkdown(next);
 
     requestAnimationFrame(() => {
-      const pos = (before + md).length;
+      const pos = start + md.length;
       el.selectionStart = el.selectionEnd = pos;
     });
   }, [htmlToMarkdown]);
@@ -43,10 +41,8 @@ export default function App() {
     const onMove = (e: MouseEvent) => {
       const shell = shellRef.current;
       if (!shell) return;
-      const rect = shell.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const next = Math.min(Math.max(x, OUTLINE_MIN_PX), OUTLINE_MAX_PX);
-      setOutlineWidth(next);
+      const x = e.clientX - shell.getBoundingClientRect().left;
+      setOutlineWidth(Math.min(Math.max(x, OUTLINE_MIN_PX), OUTLINE_MAX_PX));
     };
     const onUp = () => setIsResizing(false);
     window.addEventListener('mousemove', onMove);
