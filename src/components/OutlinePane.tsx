@@ -42,7 +42,7 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectH
     if (activeItemRef.current) {
       activeItemRef.current.scrollIntoView({
         behavior: 'smooth',
-        block: 'nearest'
+        block: 'center'
       });
     }
   }, [activeHeadingId]);

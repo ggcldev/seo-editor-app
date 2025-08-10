@@ -24,7 +24,7 @@ export default function App() {
 
   const outline = useOutline(markdown);
   const deferredOutline = useDeferredValue(outline); // <- render later if typing
-  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy, lockActiveTo, clearLock, recomputeHeadingTops, scheduleRecomputeHeadingTops } = useScrollSpy(markdown, deferredOutline, textareaRef);
+  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy, lockActiveTo, clearLock, recomputeHeadingTops, scheduleRecomputeHeadingTops } = useScrollSpy(markdown, deferredOutline, textareaRef, revealMode);
 
 
   // Extract callbacks for stable references

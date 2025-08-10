@@ -11,11 +11,12 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms = 80) {
   };
 }
 
-export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: React.RefObject<HTMLTextAreaElement | null>) {
+export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: React.RefObject<HTMLTextAreaElement | null>, revealMode: 'top' | 'center' | 'third' = 'third') {
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(outline[0]?.id ?? null);
   const activeHeadingIdRef = useRef<string | null>(null);
   const caretRef = useRef(0);
   const raf = useRef<number | null>(null);
+  const scrollRaf = useRef<number | null>(null);
   const suppressUntil = useRef(0);
   const lastProgRef = useRef(0); // NEW: recent programmatic guard
   const headingTopsRef = useRef<number[]>([]);
@@ -92,53 +93,46 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     }, 200);
   }, [recomputeHeadingTops]);
 
-  const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
-    if (!outline.length) return;
+  // helper: same bias rule used by scrollToOffsetExact
+  function revealBias(mode: 'top' | 'center' | 'third') {
+    return mode === 'top' ? 0 : mode === 'center' ? 0.5 : 0.33; // 'third' default
+  }
 
-    // Respect suppression or lock during programmatic animations
+  const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
     const now = Date.now();
     if (now < suppressUntil.current) return;
     if (lockRef.current.id && now < lockRef.current.until) return;
-    
-    // NEW: Guard against recent programmatic scrolls
-    if (now - lastProgRef.current < 400) return;
+    if (now - lastProgRef.current < 400) return; // short ignore window after programmatic jumps
 
     const el = e.currentTarget;
-    
-    // Prefer caret when it's inside the visible viewport (better UX)
-    const caretY = measureOffsetTop(el, caretRef.current);
-    if (caretY >= el.scrollTop && caretY <= el.scrollTop + el.clientHeight) {
-      const idx = findByCaret(caretRef.current);
-      const id = idx >= 0 ? outline[idx].id : outline[0]?.id ?? null;
-      if (id && id !== activeHeadingIdRef.current) {
+    if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current);
+    scrollRaf.current = requestAnimationFrame(() => {
+      const tops = headingTopsRef.current;
+      if (!tops.length) return;
+
+      // 1) Anchor inside the viewport that matches how we scroll TO headings
+      const bias = revealBias(revealMode);
+      const anchorY = el.scrollTop + bias * el.clientHeight;
+
+      // 2) Hysteresis with midpoints: we switch only after passing the middle
+      // Build a midpoints array between successive headings.
+      // mid[i] = midpoint between heading i and i+1 (length = tops.length - 1)
+      // Find first mid > anchorY; index is that position.
+      let lo = 0, hi = tops.length - 2, cut = tops.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const midY = (tops[mid] + tops[mid + 1]) / 2;
+        if (anchorY < midY) { cut = mid; hi = mid - 1; } else { lo = mid + 1; }
+      }
+      const idx = Math.max(0, cut); // active heading index
+
+      const nextId = outline[idx]?.id ?? outline[0]?.id ?? null;
+      if (nextId && nextId !== activeHeadingIdRef.current) {
         if (raf.current) cancelAnimationFrame(raf.current);
-        raf.current = requestAnimationFrame(() => setActiveHeadingId(id));
+        raf.current = requestAnimationFrame(() => setActiveHeadingId(nextId));
       }
-      return;
-    }
-
-    const tops = headingTopsRef.current;
-    if (!tops.length) return;
-
-    // Binary search for the last heading whose top is <= scrollTop + small fudge
-    let lo = 0, hi = tops.length - 1, ans = -1;
-    const y = el.scrollTop + 2; // small fudge
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (tops[mid] <= y) { 
-        ans = mid; 
-        lo = mid + 1; 
-      } else {
-        hi = mid - 1;
-      }
-    }
-
-    const nextId = ans >= 0 ? outline[ans].id : outline[0]?.id ?? null;
-    if (nextId && nextId !== activeHeadingIdRef.current) {
-      if (raf.current) cancelAnimationFrame(raf.current);
-      raf.current = requestAnimationFrame(() => setActiveHeadingId(nextId));
-    }
-  }, [outline, textareaRef, findByCaret]);
+    });
+  }, [outline, revealMode]);
 
   // Recompute heading tops when outline or markdown changes
   useEffect(() => {
@@ -189,7 +183,10 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     activeHeadingIdRef.current = activeHeadingId;
   }, [activeHeadingId]);
 
-  useEffect(() => () => { if (raf.current) cancelAnimationFrame(raf.current); }, []);
+  useEffect(() => () => {
+    if (raf.current) cancelAnimationFrame(raf.current);
+    if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current);
+  }, []);
 
   // cleanup idle job on unmount
   useEffect(() => () => { if (idleJob.current) cic(idleJob.current); }, []);
