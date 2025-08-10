@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Heading } from './useOutline';
 import { measureOffsetTop } from '../utils/scrollUtils';
+
+// Debounce helper for performance during rapid typing
+function debounce<T extends (...args: any[]) => void>(fn: T, ms = 80) {
+  let t: number | undefined;
+  return (...args: Parameters<T>) => {
+    if (t) window.clearTimeout(t);
+    t = window.setTimeout(() => fn(...args), ms);
+  };
+}
 
 export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: React.RefObject<HTMLTextAreaElement | null>) {
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(outline[0]?.id ?? null);
@@ -40,8 +49,8 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     }
   }, [findByCaret, outline]);
 
-  // Recompute heading pixel tops whenever outline or markdown changes
-  const recomputeHeadingTops = useCallback(() => {
+  // Internal recompute function
+  const _recomputeHeadingTops = useCallback(() => {
     const el = textareaRef.current;
     if (!el || !outline.length) { 
       headingTopsRef.current = []; 
@@ -49,6 +58,12 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     }
     headingTopsRef.current = outline.map(h => measureOffsetTop(el, h.offset));
   }, [outline, textareaRef]);
+
+  // Debounced version for performance during rapid changes
+  const recomputeHeadingTops = useMemo(() => 
+    debounce(_recomputeHeadingTops, 80), 
+    [_recomputeHeadingTops]
+  );
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
     if (!outline.length) return;
@@ -62,6 +77,19 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     if (now - lastProgRef.current < 400) return;
 
     const el = e.currentTarget;
+    
+    // Prefer caret when it's inside the visible viewport (better UX)
+    const caretY = measureOffsetTop(el, caretRef.current);
+    if (caretY >= el.scrollTop && caretY <= el.scrollTop + el.clientHeight) {
+      const idx = findByCaret(caretRef.current);
+      const id = idx >= 0 ? outline[idx].id : outline[0]?.id ?? null;
+      if (id && id !== activeHeadingIdRef.current) {
+        if (raf.current) cancelAnimationFrame(raf.current);
+        raf.current = requestAnimationFrame(() => setActiveHeadingId(id));
+      }
+      return;
+    }
+
     const tops = headingTopsRef.current;
     if (!tops.length) return;
 
@@ -83,7 +111,7 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
       if (raf.current) cancelAnimationFrame(raf.current);
       raf.current = requestAnimationFrame(() => setActiveHeadingId(nextId));
     }
-  }, [outline, textareaRef]);
+  }, [outline, textareaRef, findByCaret]);
 
   // Recompute heading tops when outline or markdown changes
   useEffect(() => {
@@ -100,11 +128,20 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     setActiveHeadingId(outline[Math.max(0, idx)]?.id ?? outline[0]?.id ?? null);
   }, [outline, findByCaret]);
 
-  // Recompute on window resize
+  // Recompute on window resize and textarea element resize
   useEffect(() => {
     const handleResize = () => recomputeHeadingTops();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, [recomputeHeadingTops]);
+
+  // Add ResizeObserver for textarea element size changes
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => recomputeHeadingTops());
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [recomputeHeadingTops]);
 
   const suppressScrollSpy = useCallback((ms = 1000) => {

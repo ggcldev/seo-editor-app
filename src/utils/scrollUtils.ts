@@ -1,6 +1,30 @@
 // scrollUtils.ts
 export type RevealMode = 'top' | 'center' | 'third';
 
+// Cache computed styles for performance
+const STYLE_CACHE = new WeakMap<HTMLTextAreaElement, Record<string, string>>();
+
+function copyComputed(el: HTMLTextAreaElement): Record<string, string> {
+  const hit = STYLE_CACHE.get(el);
+  if (hit) return hit;
+  
+  const cs = getComputedStyle(el);
+  const keys = [
+    'boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform', 'whiteSpace'
+  ];
+  
+  const out: Record<string, string> = {};
+  for (const k of keys) {
+    const cssKey = k.replace(/[A-Z]/g, '-$&').toLowerCase();
+    out[cssKey] = cs.getPropertyValue(cssKey);
+  }
+  
+  STYLE_CACHE.set(el, out);
+  return out;
+}
+
 export function smoothScrollTo(
   el: HTMLTextAreaElement,
   target: number,
@@ -35,27 +59,21 @@ export function scrollToOffsetExact(
 
 export function measureOffsetTop(el: HTMLTextAreaElement, offset: number) {
   const mirror = document.createElement('div');
-  const cs = getComputedStyle(el);
-  // copy layout & font-ish styles that affect wrapping
-  [
-    'boxSizing','width','paddingTop','paddingRight','paddingBottom','paddingLeft',
-    'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
-    'fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','textTransform',
-    'whiteSpace'
-  ].forEach(k => {
-    const value = cs.getPropertyValue(k.replace(/[A-Z]/g, '-$&').toLowerCase());
-    if (value) {
-      mirror.style.setProperty(k.replace(/[A-Z]/g, '-$&').toLowerCase(), value);
-    }
-  });
+  const styleMap = copyComputed(el);
+  
+  // Apply cached styles
+  for (const [k, v] of Object.entries(styleMap)) {
+    if (v) mirror.style.setProperty(k, v);
+  }
+  
   mirror.style.position = 'absolute';
   mirror.style.visibility = 'hidden';
   mirror.style.whiteSpace = 'pre-wrap';
   mirror.style.wordWrap = 'break-word';
   mirror.style.overflow = 'auto';
   mirror.style.pointerEvents = 'none';
-  mirror.style.height = cs.height; // important for wrapping measurement
-  mirror.style.width = cs.width;
+  mirror.style.height = styleMap['height'] || getComputedStyle(el).height;
+  mirror.style.width = styleMap['width'] || getComputedStyle(el).width;
 
   const before = el.value.slice(0, offset);
   const after = el.value.slice(offset) || ' ';

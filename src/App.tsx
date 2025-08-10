@@ -4,7 +4,7 @@ import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { useScrollSpy } from './hooks/useScrollSpy';
 import { OutlinePane } from './components/OutlinePane';
 import { Editor } from './components/Editor';
-import { scrollToOffsetExact, type RevealMode } from './utils/scrollUtils';
+import { scrollToOffsetExact, measureOffsetTop, type RevealMode } from './utils/scrollUtils';
 
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,
@@ -40,9 +40,14 @@ export default function App() {
     const el = textareaRef.current;
     if (!h || !el) return;
 
+    // Calculate dynamic lock duration based on jump distance
+    const targetY = measureOffsetTop(el, h.offset);
+    const distance = Math.abs(el.scrollTop - targetY);
+    const ms = Math.min(1200, Math.max(500, Math.round(distance / 2))); // 500-1200ms
+
     // Lock the highlight to this heading and suppress scrollspy during animation
-    lockActiveTo(h.id, 1000);
-    suppressScrollSpy(1000);
+    lockActiveTo(h.id, ms);
+    suppressScrollSpy(ms);
 
     // Move caret (source of truth) & update highlight immediately
     el.focus();

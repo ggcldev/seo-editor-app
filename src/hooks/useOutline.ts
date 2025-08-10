@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { toId } from '../utils/ids';
 
-export type Heading = { level: 1 | 2 | 3; text: string; id: string; offset: number };
+export type Heading = { level: 1 | 2 | 3 | 4 | 5 | 6; text: string; id: string; offset: number };
 
 export function useOutline(markdown: string): Heading[] {
   return useMemo(() => extractHeadings(markdown), [markdown]);
@@ -17,12 +17,13 @@ export function extractHeadings(md: string): Heading[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const atx = line.match(/^(#{1,3})\s+(.+)$/);
+    const atx = line.match(/^(#{1,6})\s+(.+)$/);
     const next = lines[i + 1] || '';
 
     if (atx) {
       const text = clean(atx[2]);
-      if (text) raw.push({ level: atx[1].length as 1|2|3, text, offset });
+      const level = Math.max(1, Math.min(6, atx[1].length)) as 1|2|3|4|5|6;
+      if (text) raw.push({ level, text, offset });
       offset += line.length + 1;
       continue;
     }
