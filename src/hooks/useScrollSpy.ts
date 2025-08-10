@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Heading } from './useOutline';
-import { measureOffsetTop } from '../utils/scrollUtils';
+import { measureOffsetTop, measureHeadingTopsBatch } from '../utils/scrollUtils';
 
 // Debounce helper for performance during rapid typing
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 80) {
@@ -49,21 +49,27 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     }
   }, [findByCaret, outline]);
 
-  // Internal recompute function
-  const _recomputeHeadingTops = useCallback(() => {
+  const recomputeHeadingTops = useCallback(() => {
     const el = textareaRef.current;
     if (!el || !outline.length) { 
       headingTopsRef.current = []; 
       return; 
     }
-    headingTopsRef.current = outline.map(h => measureOffsetTop(el, h.offset));
-  }, [outline, textareaRef]);
 
-  // Debounced version for performance during rapid changes
-  const recomputeHeadingTops = useMemo(() => 
-    debounce(_recomputeHeadingTops, 80), 
-    [_recomputeHeadingTops]
-  );
+    let tops = measureHeadingTopsBatch(el, outline);
+
+    // Safety: if measurement looks wrong (non-increasing or zeros), fall back
+    const bad =
+      tops.length !== outline.length ||
+      tops.some((v, i) => (i > 0 && v < tops[i - 1])) ||
+      tops.every(v => v === 0);
+
+    if (bad) {
+      tops = outline.map(h => measureOffsetTop(el, h.offset));
+    }
+
+    headingTopsRef.current = tops;
+  }, [outline, textareaRef]);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
     if (!outline.length) return;

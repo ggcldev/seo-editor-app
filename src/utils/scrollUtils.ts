@@ -44,6 +44,59 @@ export function smoothScrollTo(
   requestAnimationFrame(tick);
 }
 
+export function measureHeadingTopsBatch(
+  el: HTMLTextAreaElement,
+  outline: { offset: number }[]
+): number[] {
+  if (!outline.length) return [];
+
+  // Build mirror once and keep appending into it
+  const mirror = document.createElement('div');
+  const cs = getComputedStyle(el);
+  const keys = [
+    'boxSizing','width','paddingTop','paddingRight','paddingBottom','paddingLeft',
+    'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+    'fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','textTransform','whiteSpace'
+  ];
+  for (const k of keys) {
+    const cssKey = k.replace(/[A-Z]/g, '-$&').toLowerCase();
+    mirror.style.setProperty(cssKey, cs.getPropertyValue(cssKey));
+  }
+  mirror.style.position = 'absolute';
+  mirror.style.visibility = 'hidden';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.wordWrap = 'break-word';
+  mirror.style.overflow = 'auto';
+  mirror.style.pointerEvents = 'none';
+  mirror.style.height = cs.height;
+  mirror.style.width  = cs.width;
+
+  document.body.appendChild(mirror);
+
+  const tops: number[] = [];
+  let cursor = 0;
+  const text = el.value; // use the actual textarea value to avoid drift
+
+  for (let i = 0; i < outline.length; i++) {
+    const off = outline[i].offset;
+
+    if (off > cursor) {
+      mirror.appendChild(document.createTextNode(text.slice(cursor, off)));
+      cursor = off;
+    }
+
+    const marker = document.createElement('span');
+    marker.textContent = text[cursor] ?? ' ';
+    mirror.appendChild(marker);
+
+    // Now marker is actually in the mounted mirror
+    tops.push(marker.offsetTop);
+  }
+
+  document.body.removeChild(mirror);
+  return tops;
+}
+
 export function scrollToOffsetExact(
   el: HTMLTextAreaElement,
   offset: number,
