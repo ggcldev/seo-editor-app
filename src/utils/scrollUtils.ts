@@ -112,31 +112,40 @@ export function scrollToOffsetExact(
 
 export function measureOffsetTop(el: HTMLTextAreaElement, offset: number) {
   const mirror = document.createElement('div');
-  const styleMap = copyComputed(el);
-  
-  // Apply cached styles
-  for (const [k, v] of Object.entries(styleMap)) {
-    if (v) mirror.style.setProperty(k, v);
-  }
-  
+  const cs = getComputedStyle(el);
+
+  const copy = (prop: string) => {
+    const k = prop.replace(/[A-Z]/g, '-$&').toLowerCase();
+    mirror.style.setProperty(k, cs.getPropertyValue(k));
+  };
+
+  [
+    'boxSizing','paddingTop','paddingRight','paddingBottom','paddingLeft',
+    'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+    'fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','textTransform',
+    'whiteSpace'
+  ].forEach(copy);
+
+  // ✅ Use actual element size (computed can be empty/percent → bad math)
   mirror.style.position = 'absolute';
   mirror.style.visibility = 'hidden';
   mirror.style.whiteSpace = 'pre-wrap';
   mirror.style.wordWrap = 'break-word';
   mirror.style.overflow = 'auto';
   mirror.style.pointerEvents = 'none';
-  mirror.style.height = styleMap['height'] || getComputedStyle(el).height;
-  mirror.style.width = styleMap['width'] || getComputedStyle(el).width;
+  mirror.style.height = el.clientHeight + 'px';
+  mirror.style.width  = el.clientWidth + 'px';
 
   const before = el.value.slice(0, offset);
   const after = el.value.slice(offset) || ' ';
   const marker = document.createElement('span');
   marker.textContent = after[0];
+
   mirror.textContent = before;
   mirror.appendChild(marker);
-
   document.body.appendChild(mirror);
-  const top = marker.offsetTop; // pixel top inside mirror
+
+  const top = marker.offsetTop;
   document.body.removeChild(mirror);
   return top;
 }

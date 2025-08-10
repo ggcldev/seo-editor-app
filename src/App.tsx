@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useDeferredValue } from 'react';
 import { useOutline } from './hooks/useOutline';
 import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { useScrollSpy } from './hooks/useScrollSpy';
@@ -23,7 +23,8 @@ export default function App() {
   const { htmlToMarkdown } = usePasteToMarkdown();
 
   const outline = useOutline(markdown);
-  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy, lockActiveTo, clearLock, recomputeHeadingTops } = useScrollSpy(markdown, outline, textareaRef);
+  const deferredOutline = useDeferredValue(outline); // <- render later if typing
+  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy, lockActiveTo, clearLock, recomputeHeadingTops, scheduleRecomputeHeadingTops } = useScrollSpy(markdown, deferredOutline, textareaRef);
 
 
   // Extract callbacks for stable references
@@ -52,33 +53,33 @@ export default function App() {
 
   // Handle heading selection with exact pixel positioning and lock mechanism
   const onSelectHeading = useCallback((id: string) => {
-    const h = outline.find(o => o.id === id);
+    const h = deferredOutline.find(o => o.id === id);
     const el = textareaRef.current;
     if (!h || !el) return;
 
-    // Calculate dynamic lock duration based on jump distance
-    const targetY = measureOffsetTop(el, h.offset);
-    const distance = Math.abs(el.scrollTop - targetY);
-    const ms = Math.min(1200, Math.max(500, Math.round(distance / 2))); // 500-1200ms
+    // lock + suppress scroll spy while animating
+    lockActiveTo(h.id, 1000);
+    suppressScrollSpy(1000);
 
-    // Lock the highlight to this heading and suppress scrollspy during animation
-    lockActiveTo(h.id, ms);
-    suppressScrollSpy(ms);
-
-    // Compute caret at end of the heading line
+    // place caret at end of heading
     const pos = caretAtHeadingEnd(markdown, h);
-
-    // Move caret & update highlight immediately
     el.focus();
     el.setSelectionRange(pos, pos);
     handleCaretChange(pos);
 
-    // Smoothly reveal the section (use the heading start for top alignment)
-    scrollToOffsetExact(el, h.offset, revealMode, () => {
-      clearLock();
-      handleCaretChange(pos); // reassert after animation
+    // ⬅️ recompute tops immediately for accurate tracking
+    recomputeHeadingTops();
+
+    // ✅ wait one paint, then animate scroll reliably
+    requestAnimationFrame(() => {
+      scrollToOffsetExact(el, h.offset, revealMode, () => {
+        clearLock();
+        handleCaretChange(pos);
+        // one more recompute after the jump finishes (keeps spy perfect)
+        recomputeHeadingTops();
+      });
     });
-  }, [outline, revealMode, lockActiveTo, suppressScrollSpy, handleCaretChange, clearLock, markdown]);
+  }, [deferredOutline, markdown, revealMode, lockActiveTo, suppressScrollSpy, handleCaretChange, clearLock, recomputeHeadingTops]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const html = e.clipboardData?.getData('text/html');
@@ -96,9 +97,21 @@ export default function App() {
       const pos = start + md.length;
       el.selectionStart = el.selectionEnd = pos;
       handleCaretChange(pos);
-      recomputeHeadingTops();
+      scheduleRecomputeHeadingTops();
     });
-  }, [htmlToMarkdown]);
+  }, [htmlToMarkdown, handleCaretChange, scheduleRecomputeHeadingTops]);
+
+  // Schedule recompute on markdown changes (idle, non-blocking)
+  useEffect(() => {
+    scheduleRecomputeHeadingTops();
+  }, [scheduleRecomputeHeadingTops, markdown]);
+
+  // Schedule recompute on window resize (idle, non-blocking)
+  useEffect(() => {
+    const onResize = () => scheduleRecomputeHeadingTops();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [scheduleRecomputeHeadingTops]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -107,12 +120,13 @@ export default function App() {
       if (!shell) return;
       const x = e.clientX - shell.getBoundingClientRect().left;
       setOutlineWidth(Math.min(Math.max(x, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
+      scheduleRecomputeHeadingTops();
     };
     const onUp = () => {
       setIsResizing(false);
       document.body.classList.remove('noselect');
       // Recompute heading tops after resize is complete
-      recomputeHeadingTops();
+      scheduleRecomputeHeadingTops();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp, { once: true });
@@ -120,7 +134,7 @@ export default function App() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [isResizing, recomputeHeadingTops]);
+  }, [isResizing, scheduleRecomputeHeadingTops]);
 
   return (
     <div
@@ -128,7 +142,7 @@ export default function App() {
       style={{ display: 'grid', gridTemplateColumns: `${outlineWidth}px 1fr`, height: '100vh' }}
     >
       <OutlinePane 
-        outline={outline} 
+        outline={deferredOutline} 
         activeHeadingId={activeHeadingId}
         onStartResize={onStartResize}
         onSelectHeading={onSelectHeading}

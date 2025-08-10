@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { Heading } from '../hooks/useOutline';
 import { OutlineItem } from './OutlineItem';
 
@@ -16,6 +16,24 @@ type Props = {
   onStartResize: () => void;
   onSelectHeading: (id: string) => void;
 };
+
+const Row = React.memo(function Row({
+  h, isActive, onClick
+}: { h: Heading; isActive: boolean; onClick: () => void }) {
+  return (
+    <div
+      key={h.id}
+      onClick={onClick}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
+      role="button"
+      tabIndex={0}
+      aria-current={isActive ? "true" : undefined}
+      style={{ cursor: "pointer" }}
+    >
+      <OutlineItem item={h} isActive={isActive} />
+    </div>
+  );
+});
 
 export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectHeading }: Props) {
   const activeItemRef = useRef<HTMLDivElement>(null);
@@ -45,19 +63,11 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectH
           {outline.map((h, i) => {
             const isActive = h.id === activeHeadingId;
             return (
-              <div
-                key={`${h.id}-${i}`}
-                ref={isActive ? activeItemRef : null}
-                onClick={() => onSelectHeading(h.id)}
-                onKeyDown={(e) => e.key === 'Enter' && onSelectHeading(h.id)}
-                role="button"
-                tabIndex={0}
-                aria-current={isActive ? 'true' : undefined}
-                style={{ cursor: 'pointer' }}
-              >
-                <OutlineItem 
-                  item={h} 
+              <div key={`${h.id}-${i}`} ref={isActive ? activeItemRef : null}>
+                <Row
+                  h={h}
                   isActive={isActive}
+                  onClick={() => onSelectHeading(h.id)}
                 />
               </div>
             );

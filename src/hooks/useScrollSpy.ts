@@ -71,6 +71,27 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     headingTopsRef.current = tops;
   }, [outline, textareaRef]);
 
+  // Idle scheduler (requestIdleCallback with fallback)
+  type IdleHandle = number;
+  const ric = (cb: () => void, timeout = 250): IdleHandle =>
+    'requestIdleCallback' in window
+      ? (window as any).requestIdleCallback(cb, { timeout })
+      : window.setTimeout(cb, timeout);
+  const cic = (id: IdleHandle) =>
+    'cancelIdleCallback' in window
+      ? (window as any).cancelIdleCallback(id)
+      : clearTimeout(id as any);
+
+  const idleJob = useRef<IdleHandle | null>(null);
+
+  const scheduleRecomputeHeadingTops = useCallback(() => {
+    if (idleJob.current) cic(idleJob.current);
+    idleJob.current = ric(() => {
+      idleJob.current = null;
+      recomputeHeadingTops();
+    }, 200);
+  }, [recomputeHeadingTops]);
+
   const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
     if (!outline.length) return;
 
@@ -170,6 +191,9 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
 
   useEffect(() => () => { if (raf.current) cancelAnimationFrame(raf.current); }, []);
 
+  // cleanup idle job on unmount
+  useEffect(() => () => { if (idleJob.current) cic(idleJob.current); }, []);
+
   return {
     activeHeadingId,
     handleScroll,
@@ -177,7 +201,8 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
     suppressScrollSpy,
     lockActiveTo,
     clearLock,
-    recomputeHeadingTops, // NEW: Expose for manual recomputation
-  };
+    recomputeHeadingTops,          // keep for immediate calls
+    scheduleRecomputeHeadingTops,  // ✅ new idle scheduler
+  } as const;
 }
 
