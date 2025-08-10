@@ -42,7 +42,7 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectH
       <div style={OUTLINE_STYLES.container}>
         <div style={OUTLINE_STYLES.title}>Outline</div>
         <div style={OUTLINE_STYLES.list}>
-          {outline.filter(h => h.level <= 3).map((h, i) => {
+          {outline.map((h, i) => {
             const isActive = h.id === activeHeadingId;
             return (
               <div

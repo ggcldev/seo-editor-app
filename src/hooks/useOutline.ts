@@ -22,8 +22,11 @@ export function extractHeadings(md: string): Heading[] {
 
     if (atx) {
       const text = clean(atx[2]);
-      const level = Math.max(1, Math.min(6, atx[1].length)) as 1|2|3|4|5|6;
-      if (text) raw.push({ level, text, offset });
+      if (text) {
+        const rawLevel = atx[1].length;
+        const level = Math.max(1, Math.min(6, rawLevel)) as 1|2|3|4|5|6;
+        raw.push({ level, text, offset });
+      }
       offset += line.length + 1;
       continue;
     }
