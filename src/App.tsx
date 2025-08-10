@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutline } from './hooks/useOutline';
 import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { useScrollSpy } from './hooks/useScrollSpy';
 import { OutlinePane } from './components/OutlinePane';
 import { Editor } from './components/Editor';
+import { scrollToOffsetExact, type RevealMode } from './utils/scrollUtils';
 
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,
@@ -18,13 +19,12 @@ export default function App() {
   const [isResizing, setIsResizing] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [revealMode] = useState<RevealMode>('third'); // 'top' | 'center' | 'third'
   const { htmlToMarkdown } = usePasteToMarkdown();
 
   const outline = useOutline(markdown);
-  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy } = useScrollSpy(markdown, outline);
+  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy, lockActiveTo, clearLock } = useScrollSpy(markdown, outline);
 
-  // Performance optimizations: precompute lookups
-  const idToIndex = useMemo(() => new Map(outline.map((h, i) => [h.id, i])), [outline]);
 
   // Extract callbacks for stable references
   const onStartResize = useCallback(() => {
@@ -34,54 +34,27 @@ export default function App() {
 
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
 
-  // Smooth scrolling helper
-  const smoothScrollTo = useCallback((el: HTMLTextAreaElement, target: number) => {
-    const start = el.scrollTop;
-    const delta = target - start;
-    if (Math.abs(delta) < 1) { 
-      el.scrollTop = target; 
-      return; 
-    }
-
-    const dur = 180; // ms — snappy
-    const t0 = performance.now();
-    const ease = (t: number) => t < 0.5 ? 2*t*t : -1+(4-2*t)*t; // easeInOutQuad
-
-    const tick = (now: number) => {
-      const p = Math.min(1, (now - t0) / dur);
-      el.scrollTop = start + delta * ease(p);
-      if (p < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }, []);
-
-  const targetScrollTopForOffset = useCallback((el: HTMLTextAreaElement, offset: number, total: number) => {
-    const max = Math.max(0, el.scrollHeight - el.clientHeight);
-    const ratio = total ? offset / total : 0;
-    return Math.round(max * ratio);
-  }, []);
-
-  // Handle heading selection with smooth navigation (O(1) lookup)
+  // Handle heading selection with exact pixel positioning and lock mechanism
   const onSelectHeading = useCallback((id: string) => {
-    const idx = idToIndex.get(id);
+    const h = outline.find(o => o.id === id);
     const el = textareaRef.current;
-    if (idx == null || !el) return;
-    
-    const h = outline[idx];
+    if (!h || !el) return;
 
-    // 1) Focus and place caret at heading start (this alone often scrolls into view)
+    // Lock the highlight to this heading and suppress scrollspy during animation
+    lockActiveTo(h.id, 800);
+    suppressScrollSpy(800);
+
+    // Move caret (source of truth) & update highlight immediately
     el.focus();
-    const safeOffset = Math.max(0, Math.min(h.offset, markdown.length));
-    el.setSelectionRange(safeOffset, safeOffset);
-    handleCaretChange(safeOffset);
+    el.setSelectionRange(h.offset, h.offset);
+    handleCaretChange(h.offset);
 
-    // 2) Suppress scroll spy during programmatic navigation to prevent race conditions
-    suppressScrollSpy(300);
-
-    // 3) Smooth scroll to the heading position
-    const targetScroll = targetScrollTopForOffset(el, safeOffset, markdown.length);
-    smoothScrollTo(el, targetScroll);
-  }, [idToIndex, outline, markdown.length, smoothScrollTo, targetScrollTopForOffset, handleCaretChange, suppressScrollSpy]);
+    // Smoothly reveal the section; unlock at the end
+    scrollToOffsetExact(el, h.offset, revealMode, () => {
+      clearLock();              // release the lock
+      handleCaretChange(h.offset); // reassert, just in case
+    });
+  }, [outline, revealMode, lockActiveTo, suppressScrollSpy, handleCaretChange, clearLock]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const html = e.clipboardData?.getData('text/html');
