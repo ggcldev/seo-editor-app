@@ -30,6 +30,7 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize }: Props) 
   return (
     <aside style={OUTLINE_STYLES.aside}>
       <div
+        className="outline-resizer"
         onMouseDown={(e) => {
           e.preventDefault();
           onStartResize();

@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+html, body, #root { 
+  height: 100%; 
+}
+
+body { 
+  @apply text-gray-900 bg-gray-100; 
+}
+
+html { 
+  scroll-behavior: smooth; 
+}
+
+textarea::-webkit-scrollbar { 
+  display: none; 
+}
+
+textarea { 
+  scrollbar-width: none; 
+  -ms-overflow-style: none; 
+}
+
+/* Resizing affordances */
+.outline-resizer { 
+  cursor: col-resize; 
+}
+
+.outline-resizer:hover {
+  background-color: rgba(229, 231, 235, 0.8);
+}
+
+.outline-resizer:active {
+  background-color: rgba(156, 163, 175, 0.8);
+}
+
+.noselect { 
+  user-select: none; 
+}

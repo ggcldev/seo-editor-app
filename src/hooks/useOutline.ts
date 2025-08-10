@@ -10,7 +10,7 @@ export function useOutline(markdown: string): Heading[] {
 export function extractHeadings(md: string): Heading[] {
   if (!md.trim()) return [];
   const lines = md.split(/\r?\n/);
-  const items: Heading[] = [];
+  const raw: Omit<Heading, 'id'>[] = [];
   let offset = 0;
 
   const clean = (s: string) => s.replace(/[#*_`~[\]()]/g, '').trim();
@@ -22,21 +22,21 @@ export function extractHeadings(md: string): Heading[] {
 
     if (atx) {
       const text = clean(atx[2]);
-      if (text) items.push({ level: atx[1].length as 1|2|3, text, id: toId(text), offset });
+      if (text) raw.push({ level: atx[1].length as 1|2|3, text, offset });
       offset += line.length + 1;
       continue;
     }
 
     const text = clean(line);
     if (/^=+\s*$/.test(next) && text) {
-      items.push({ level: 1, text, id: toId(text), offset });
+      raw.push({ level: 1, text, offset });
       offset += line.length + 1; // title line
       i++;
       offset += (lines[i]?.length ?? 0) + 1; // underline
       continue;
     }
     if (/^-+\s*$/.test(next) && text) {
-      items.push({ level: 2, text, id: toId(text), offset });
+      raw.push({ level: 2, text, offset });
       offset += line.length + 1;
       i++;
       offset += (lines[i]?.length ?? 0) + 1;
@@ -45,6 +45,16 @@ export function extractHeadings(md: string): Heading[] {
 
     offset += line.length + 1;
   }
+
+  // De-duplicate IDs to prevent collisions
+  const seen = new Map<string, number>();
+  const items: Heading[] = raw.map(h => {
+    const base = toId(h.text);
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    const id = count === 0 ? base : `${base}-${count}`;
+    return { ...h, id };
+  });
 
   return items;
 }

@@ -22,6 +22,14 @@ export default function App() {
   const outline = useOutline(markdown);
   const { activeHeadingId, handleScroll, handleCaretChange } = useScrollSpy(markdown, outline);
 
+  // Extract callbacks for stable references
+  const onStartResize = useCallback(() => {
+    setIsResizing(true);
+    document.body.classList.add('noselect');
+  }, []);
+
+  const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
+
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const html = e.clipboardData?.getData('text/html');
     if (!html) return;
@@ -48,7 +56,10 @@ export default function App() {
       const x = e.clientX - shell.getBoundingClientRect().left;
       setOutlineWidth(Math.min(Math.max(x, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
     };
-    const onUp = () => setIsResizing(false);
+    const onUp = () => {
+      setIsResizing(false);
+      document.body.classList.remove('noselect');
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp, { once: true });
     return () => {
@@ -65,7 +76,7 @@ export default function App() {
       <OutlinePane 
         outline={outline} 
         activeHeadingId={activeHeadingId}
-        onStartResize={useCallback(() => setIsResizing(true), [])} 
+        onStartResize={onStartResize} 
       />
 
       <Editor
@@ -75,7 +86,7 @@ export default function App() {
         onScroll={handleScroll}
         onCaretChange={handleCaretChange}
         narrow={narrow}
-        toggleNarrow={useCallback(() => setNarrow((v) => !v), [])}
+        toggleNarrow={toggleNarrow}
       />
     </div>
   );
