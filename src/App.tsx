@@ -34,6 +34,22 @@ export default function App() {
 
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
 
+  // Helper to compute caret position at the end of a heading line
+  function caretAtHeadingEnd(markdown: string, h: { offset: number }) {
+    // Find end of the line that contains the heading
+    const nl = markdown.indexOf('\n', h.offset);
+    const lineEnd = nl === -1 ? markdown.length : nl;
+
+    // Slice the heading line text
+    const line = markdown.slice(h.offset, lineEnd);
+
+    // Trim any trailing " ###" and trailing spaces (ATX style like "## Title ###")
+    const trimmed = line.replace(/\s*#+\s*$/, '').replace(/\s+$/, '');
+
+    // Caret should sit right after the visible heading text
+    return h.offset + trimmed.length;
+  }
+
   // Handle heading selection with exact pixel positioning and lock mechanism
   const onSelectHeading = useCallback((id: string) => {
     const h = outline.find(o => o.id === id);
@@ -49,17 +65,20 @@ export default function App() {
     lockActiveTo(h.id, ms);
     suppressScrollSpy(ms);
 
-    // Move caret (source of truth) & update highlight immediately
-    el.focus();
-    el.setSelectionRange(h.offset, h.offset);
-    handleCaretChange(h.offset);
+    // Compute caret at end of the heading line
+    const pos = caretAtHeadingEnd(markdown, h);
 
-    // Smoothly reveal the section; unlock at the end
+    // Move caret & update highlight immediately
+    el.focus();
+    el.setSelectionRange(pos, pos);
+    handleCaretChange(pos);
+
+    // Smoothly reveal the section (use the heading start for top alignment)
     scrollToOffsetExact(el, h.offset, revealMode, () => {
-      clearLock();              // release the lock
-      handleCaretChange(h.offset); // reassert, just in case
+      clearLock();
+      handleCaretChange(pos); // reassert after animation
     });
-  }, [outline, revealMode, lockActiveTo, suppressScrollSpy, handleCaretChange, clearLock]);
+  }, [outline, revealMode, lockActiveTo, suppressScrollSpy, handleCaretChange, clearLock, markdown]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const html = e.clipboardData?.getData('text/html');
