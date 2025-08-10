@@ -23,7 +23,7 @@ export default function App() {
   const { htmlToMarkdown } = usePasteToMarkdown();
 
   const outline = useOutline(markdown);
-  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy, lockActiveTo, clearLock } = useScrollSpy(markdown, outline);
+  const { activeHeadingId, handleScroll, handleCaretChange, suppressScrollSpy, lockActiveTo, clearLock, recomputeHeadingTops } = useScrollSpy(markdown, outline, textareaRef);
 
 
   // Extract callbacks for stable references
@@ -41,8 +41,8 @@ export default function App() {
     if (!h || !el) return;
 
     // Lock the highlight to this heading and suppress scrollspy during animation
-    lockActiveTo(h.id, 800);
-    suppressScrollSpy(800);
+    lockActiveTo(h.id, 1000);
+    suppressScrollSpy(1000);
 
     // Move caret (source of truth) & update highlight immediately
     el.focus();
@@ -71,6 +71,8 @@ export default function App() {
     requestAnimationFrame(() => {
       const pos = start + md.length;
       el.selectionStart = el.selectionEnd = pos;
+      handleCaretChange(pos);
+      recomputeHeadingTops();
     });
   }, [htmlToMarkdown]);
 
@@ -85,6 +87,8 @@ export default function App() {
     const onUp = () => {
       setIsResizing(false);
       document.body.classList.remove('noselect');
+      // Recompute heading tops after resize is complete
+      recomputeHeadingTops();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp, { once: true });
@@ -92,7 +96,7 @@ export default function App() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [isResizing]);
+  }, [isResizing, recomputeHeadingTops]);
 
   return (
     <div

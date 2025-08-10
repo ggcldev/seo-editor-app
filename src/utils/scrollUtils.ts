@@ -33,7 +33,7 @@ export function scrollToOffsetExact(
   smoothScrollTo(el, Math.round(target), 200, onComplete);
 }
 
-function measureOffsetTop(el: HTMLTextAreaElement, offset: number) {
+export function measureOffsetTop(el: HTMLTextAreaElement, offset: number) {
   const mirror = document.createElement('div');
   const cs = getComputedStyle(el);
   // copy layout & font-ish styles that affect wrapping

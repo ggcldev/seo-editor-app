@@ -23,7 +23,7 @@ const EDITOR_STYLES = {
     width: '100%', height: 'calc(100vh - 48px)', resize: 'none' as const, border: 'none', padding: 0, paddingTop: 32, outline: 'none',
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
     fontSize: 14, lineHeight: 1.8, fontWeight: 500, color: '#111827', background: '#f6f6f6',
-    boxSizing: 'border-box' as const, scrollBehavior: 'smooth' as const, scrollbarWidth: 'none' as const, msOverflowStyle: 'none' as const
+    boxSizing: 'border-box' as const, scrollbarWidth: 'none' as const, msOverflowStyle: 'none' as const
   },
   scrollbar: {
     track: {
