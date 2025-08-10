@@ -6,6 +6,7 @@ type Props = {
   onCaretChange: (pos: number) => void;
   narrow: boolean;
   toggleNarrow: () => void;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
 };
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -37,7 +38,7 @@ const EDITOR_STYLES = {
   }
 } as const;
 
-export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCaretChange, narrow, toggleNarrow }: Props) {
+export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCaretChange, narrow, toggleNarrow, textareaRef }: Props) {
   const [showScrollbar, setShowScrollbar] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [scrollThumbSize, setScrollThumbSize] = useState(20);
@@ -97,6 +98,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
             {narrow ? 'Full width' : 'Squeeze'}
           </button>
           <textarea
+            ref={textareaRef}
             value={markdown}
             onChange={(e) => { setMarkdown(e.target.value); onCaretChange(e.currentTarget.selectionStart ?? 0); }}
             onPaste={onPasteMarkdown}

@@ -14,9 +14,10 @@ type Props = {
   outline: Heading[];
   activeHeadingId: string | null;
   onStartResize: () => void;
+  onSelectHeading: (id: string) => void;
 };
 
-export function OutlinePane({ outline, activeHeadingId, onStartResize }: Props) {
+export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectHeading }: Props) {
   const activeItemRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,17 +42,26 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize }: Props) 
       <div style={OUTLINE_STYLES.container}>
         <div style={OUTLINE_STYLES.title}>Outline</div>
         <div style={OUTLINE_STYLES.list}>
-          {outline.map((h, i) => (
-            <div 
-              key={`${h.id}-${i}`}
-              ref={h.id === activeHeadingId ? activeItemRef : null}
-            >
-              <OutlineItem 
-                item={h} 
-                isActive={h.id === activeHeadingId}
-              />
-            </div>
-          ))}
+          {outline.map((h, i) => {
+            const isActive = h.id === activeHeadingId;
+            return (
+              <div
+                key={`${h.id}-${i}`}
+                ref={isActive ? activeItemRef : null}
+                onClick={() => onSelectHeading(h.id)}
+                onKeyDown={(e) => e.key === 'Enter' && onSelectHeading(h.id)}
+                role="button"
+                tabIndex={0}
+                aria-current={isActive ? 'true' : undefined}
+                style={{ cursor: 'pointer' }}
+              >
+                <OutlineItem 
+                  item={h} 
+                  isActive={isActive}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </aside>
