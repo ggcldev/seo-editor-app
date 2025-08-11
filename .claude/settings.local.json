@@ -16,7 +16,8 @@
       "Bash(git remote set-url:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npm run:*)",
-      "Bash(gh repo list:*)"
+      "Bash(gh repo list:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }
