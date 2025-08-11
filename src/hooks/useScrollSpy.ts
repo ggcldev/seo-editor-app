@@ -1,15 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Heading } from './useOutline';
 import { measureOffsetTop, measureHeadingTopsBatch } from '../utils/scrollUtils';
 
-// Debounce helper for performance during rapid typing
-function debounce<T extends (...args: any[]) => void>(fn: T, ms = 80) {
-  let t: number | undefined;
-  return (...args: Parameters<T>) => {
-    if (t) window.clearTimeout(t);
-    t = window.setTimeout(() => fn(...args), ms);
-  };
-}
 
 export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: React.RefObject<HTMLTextAreaElement | null>, revealMode: 'top' | 'center' | 'third' = 'third') {
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(outline[0]?.id ?? null);
@@ -76,11 +68,14 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
   type IdleHandle = number;
   const ric = (cb: () => void, timeout = 250): IdleHandle =>
     'requestIdleCallback' in window
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ? (window as any).requestIdleCallback(cb, { timeout })
       : window.setTimeout(cb, timeout);
   const cic = (id: IdleHandle) =>
     'cancelIdleCallback' in window
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ? (window as any).cancelIdleCallback(id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       : clearTimeout(id as any);
 
   const idleJob = useRef<IdleHandle | null>(null);

@@ -3,12 +3,20 @@ export type WHeading = { level: 1|2|3|4|5|6; text: string; offset: number };
 
 self.onmessage = (e: MessageEvent<string>) => {
   const md = (e.data || "").replace(/\r\n/g, "\n");
-  if (!md.trim()) { (self as any).postMessage([]); return; }
+  if (!md.trim()) { postMessage([]); return; }
 
   const lines = md.split("\n");
   const out: WHeading[] = [];
   let offset = 0;
-  const clean = (s: string) => s.replace(/[#*_`~[\]()]/g, "").trim();
+  const clean = (s: string) => s
+    .replace(/\*\*(.*?)\*\*/g, '$1')      // **bold** -> bold
+    .replace(/\*(.*?)\*/g, '$1')          // *italic* -> italic
+    .replace(/`(.*?)`/g, '$1')            // `code` -> code
+    .replace(/~~(.*?)~~/g, '$1')          // ~~strike~~ -> strike
+    .replace(/\[(.*?)\]\([^)]*\)/g, '$1') // [link](url) -> link
+    .replace(/!\[(.*?)\]\([^)]*\)/g, '$1') // ![alt](img) -> alt
+    .replace(/#+\s*$/, '')                // trailing ### 
+    .trim();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i], next = lines[i + 1] || "";
@@ -32,5 +40,5 @@ self.onmessage = (e: MessageEvent<string>) => {
     offset += line.length + 1;
   }
 
-  (self as any).postMessage(out);
+  postMessage(out);
 };

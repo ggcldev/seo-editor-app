@@ -1,8 +1,6 @@
 // scrollUtils.ts
 export type RevealMode = 'top' | 'center' | 'third';
 
-// Cache computed styles for performance
-const STYLE_CACHE = new WeakMap<HTMLTextAreaElement, Record<string, string>>();
 
 // Cache mirror elements to avoid create/destroy churn
 const MIRRORS = new WeakMap<HTMLTextAreaElement, HTMLDivElement>();
@@ -13,20 +11,6 @@ const COPY_KEYS = [
   'fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','textTransform','whiteSpace'
 ] as const;
 
-function copyComputed(el: HTMLTextAreaElement): Record<string, string> {
-  const hit = STYLE_CACHE.get(el);
-  if (hit) return hit;
-  
-  const cs = getComputedStyle(el);
-  const out: Record<string, string> = {};
-  for (const k of COPY_KEYS) {
-    const cssKey = k.replace(/[A-Z]/g, '-$&').toLowerCase();
-    out[cssKey] = cs.getPropertyValue(cssKey);
-  }
-  
-  STYLE_CACHE.set(el, out);
-  return out;
-}
 
 function syncStyles(from: HTMLElement, to: HTMLElement) {
   const cs = getComputedStyle(from);

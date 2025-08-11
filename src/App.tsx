@@ -4,7 +4,7 @@ import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { useScrollSpy } from './hooks/useScrollSpy';
 import { OutlinePane } from './components/OutlinePane';
 import { Editor } from './components/Editor';
-import { scrollToOffsetExact, measureOffsetTop, type RevealMode } from './utils/scrollUtils';
+import { scrollToOffsetExact, type RevealMode } from './utils/scrollUtils';
 import './styles/globals.css';
 
 const OUTLINE_CONFIG = {

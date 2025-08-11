@@ -30,10 +30,14 @@ const EDITOR_STYLES = {
       position: 'absolute' as const, top: 32, right: 8, bottom: 16, width: 8, borderRadius: 4,
       background: 'rgba(203, 213, 225, 0.3)', pointerEvents: 'none' as const, zIndex: 1, transition: 'opacity 0.3s ease'
     },
-    thumb: (position: number, size: number) => ({
-      position: 'absolute' as const, top: `${position}%`, width: '100%', height: `${size}%`,
-      background: '#cbd5e1', borderRadius: 4, transition: 'all 0.1s ease',
-      transform: `translateY(-${position * (size / 100)}%)`
+    thumb: (position: number, size: number, trackHeight: number) => ({
+      position: 'absolute' as const, 
+      top: `${Math.round(position * (trackHeight - size * trackHeight / 100) / 100)}px`,
+      width: '100%', 
+      height: `${size}%`,
+      background: '#cbd5e1', 
+      borderRadius: 4, 
+      transition: 'all 0.1s ease'
     })
   }
 } as const;
@@ -42,6 +46,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
   const [showScrollbar, setShowScrollbar] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [scrollThumbSize, setScrollThumbSize] = useState(20);
+  const [trackHeight, setTrackHeight] = useState(0);
   const hideTimeoutRef = useRef<number | undefined>(undefined);
 
   const showScrollbars = useCallback(() => {
@@ -71,6 +76,8 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
       const scrollPercent = scrollTop / (scrollHeight - clientHeight);
       setScrollPosition(scrollPercent * 100);
       setScrollThumbSize(Math.max(20, (clientHeight / scrollHeight) * 100));
+      // Calculate track height: total height minus top/bottom padding (32 + 16 = 48)
+      setTrackHeight(clientHeight - 48);
     }
     onScroll(e);
   }, [onScroll, showScrollbars]);
@@ -103,13 +110,12 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
             onChange={(e) => { setMarkdown(e.target.value); onCaretChange(e.currentTarget.selectionStart ?? 0); }}
             onPaste={onPasteMarkdown}
             onScroll={handleScroll}
-            onKeyUp={reportCaret}
-            onClick={reportCaret}
+            onSelect={reportCaret}
             style={EDITOR_STYLES.textarea}
           />
           {showScrollbar && (
             <div style={EDITOR_STYLES.scrollbar.track}>
-              <div style={EDITOR_STYLES.scrollbar.thumb(scrollPosition, scrollThumbSize)} />
+              <div style={EDITOR_STYLES.scrollbar.thumb(scrollPosition, scrollThumbSize, trackHeight)} />
             </div>
           )}
         </div>
