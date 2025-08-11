@@ -42,6 +42,10 @@ const EDITOR_STYLES = {
   }
 } as const;
 
+// memoize dynamic styles to avoid new objects per render
+const useWrapperStyle = (narrow: boolean) => useMemo(() => EDITOR_STYLES.wrapper(narrow), [narrow]);
+const useThumbStyle = (pos: number, size: number, trackHeight: number) => useMemo(() => EDITOR_STYLES.scrollbar.thumb(pos, size, trackHeight), [pos, size, trackHeight]);
+
 export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCaretChange, narrow, toggleNarrow, textareaRef }: EditorProps) {
   const [showScrollbar, setShowScrollbar] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -100,9 +104,16 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
     onCaretChange(el.selectionStart ?? 0);
   }, [onCaretChange]);
 
-  // Memoize dynamic styles to avoid new objects every render
-  const wrapperStyle = useMemo(() => EDITOR_STYLES.wrapper(narrow), [narrow]);
-  const thumbStyle = useMemo(() => EDITOR_STYLES.scrollbar.thumb(scrollPosition, scrollThumbSize, trackHeight), [scrollPosition, scrollThumbSize, trackHeight]);
+  // Use memoized styles
+  const wrapperStyle = useWrapperStyle(narrow);
+  const thumbStyle = useThumbStyle(scrollPosition, scrollThumbSize, trackHeight);
+
+  // Keep typing smooth - instant updates for normal keystrokes
+  const onChangeFast = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    setMarkdown(el.value);
+    onCaretChange(el.selectionStart ?? 0);
+  }, [setMarkdown, onCaretChange]);
 
   return (
     <main style={EDITOR_STYLES.main}>
@@ -124,10 +135,11 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
           <textarea
             ref={textareaRef}
             value={markdown}
-            onChange={(e) => setMarkdown(e.target.value)}
+            onChange={onChangeFast}
+            onSelect={reportCaret}
+            onClick={(e) => onCaretChange(e.currentTarget.selectionStart ?? 0)}
             onPaste={onPasteMarkdown}
             onScroll={handleScroll}
-            onSelect={reportCaret}
             style={EDITOR_STYLES.textarea}
           />
           {showScrollbar && (
