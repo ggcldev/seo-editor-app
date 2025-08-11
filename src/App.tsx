@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useDeferredValue } from 'react';
+import { useCallback, useEffect, useRef, useState, useDeferredValue, startTransition } from 'react';
 import { useOutline } from './hooks/useOutline';
 import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { useScrollSpy } from './hooks/useScrollSpy';
@@ -92,7 +92,8 @@ export default function App() {
     const start = el.selectionStart ?? el.value.length;
     const end = el.selectionEnd ?? el.value.length;
     const next = `${el.value.slice(0, start)}${md}${el.value.slice(end)}`;
-    setMarkdown(next);
+    
+    startTransition(() => setMarkdown(next));
 
     requestAnimationFrame(() => {
       const pos = start + md.length;
