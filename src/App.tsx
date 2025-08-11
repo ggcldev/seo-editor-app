@@ -114,6 +114,9 @@ export default function App() {
     return () => window.removeEventListener('resize', onResize);
   }, [scheduleRecomputeHeadingTops]);
 
+  // Body class leak guard - ensure 'noselect' is cleaned up on unmount
+  useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
+
   useEffect(() => {
     if (!isResizing) return;
     const onMove = (e: MouseEvent) => {
