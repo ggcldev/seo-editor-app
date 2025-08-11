@@ -17,7 +17,8 @@
       "Bash(npm run typecheck:*)",
       "Bash(npm run:*)",
       "Bash(gh repo list:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }
