@@ -3,7 +3,16 @@ textarea::-webkit-scrollbar {
   display: none;
 }
 
-/* CSS paint optimization for scrollbar thumb */
-.custom-scrollbar-thumb {
-  will-change: transform;
+/* CSS optimizations for high refresh rates */
+.custom-scrollbar-thumb { 
+  will-change: transform; 
+  contain: paint; 
+}
+
+.editor-shell { 
+  contain: layout paint size; 
+}
+
+.outline-pane { 
+  contain: layout paint; 
 }

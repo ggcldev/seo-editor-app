@@ -49,9 +49,11 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectH
     if (!el) return;
     el.addEventListener('wheel', markUserScroll, { passive: true });
     el.addEventListener('touchstart', markUserScroll, { passive: true });
+    el.addEventListener('scroll', markUserScroll, { passive: true });
     return () => {
       el.removeEventListener('wheel', markUserScroll);
       el.removeEventListener('touchstart', markUserScroll);
+      el.removeEventListener('scroll', markUserScroll);
     };
   }, [markUserScroll]);
 
@@ -77,7 +79,7 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectH
   }, [activeHeadingId]);
 
   return (
-    <aside ref={scrollRef} style={OUTLINE_STYLES.aside}>
+    <aside ref={scrollRef} className="outline-pane" style={OUTLINE_STYLES.aside}>
       <div
         className="outline-resizer"
         onMouseDown={(e) => { e.preventDefault(); onStartResize(); }}

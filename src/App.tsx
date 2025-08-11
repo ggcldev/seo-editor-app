@@ -153,6 +153,7 @@ export default function App() {
   return (
     <div
       ref={shellRef}
+      className="editor-shell"
       style={{ display: 'grid', gridTemplateColumns: `${outlineWidth}px 1fr`, height: '100vh' }}
     >
       <OutlinePane 
