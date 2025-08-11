@@ -1,12 +1,12 @@
 import React from 'react';
 import type { Heading } from '../hooks/useOutline';
 
-type Props = { 
+type OutlineItemProps = { 
   item: Heading;
   isActive?: boolean;
 };
 
-function OutlineItemBase({ item, isActive = false }: Props) {
+function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
   // Deeper levels indent a bit more tightly after H3
   const indentPx = item.level <= 3 ? (item.level - 1) * 10 : 20 + (item.level - 3) * 8;
   // Make H4–H6 a tad smaller so the hierarchy reads well

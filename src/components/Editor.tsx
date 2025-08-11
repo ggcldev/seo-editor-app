@@ -1,4 +1,4 @@
-type Props = {
+type EditorProps = {
   markdown: string;
   setMarkdown: (v: string) => void;
   onPasteMarkdown: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
@@ -38,7 +38,7 @@ const EDITOR_STYLES = {
   }
 } as const;
 
-export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCaretChange, narrow, toggleNarrow, textareaRef }: Props) {
+export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCaretChange, narrow, toggleNarrow, textareaRef }: EditorProps) {
   const [showScrollbar, setShowScrollbar] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [scrollThumbSize, setScrollThumbSize] = useState(20);

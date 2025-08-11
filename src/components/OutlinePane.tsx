@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import type { Heading } from '../hooks/useOutline';
 import { OutlineItem } from './OutlineItem';
 
@@ -10,7 +10,7 @@ const OUTLINE_STYLES = {
   list: { display: 'grid', gap: 4 }
 } as const;
 
-type Props = {
+type OutlinePaneProps = {
   outline: Heading[];
   activeHeadingId: string | null;
   onStartResize: () => void;
@@ -22,12 +22,12 @@ const Row = React.memo(function Row({
 }: { h: Heading; isActive: boolean; onClick: () => void }) {
   return (
     <div
-      key={h.id}
       onClick={onClick}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       role="button"
       tabIndex={0}
       aria-current={isActive ? "true" : undefined}
+      aria-pressed={isActive ? true : undefined}
       style={{ cursor: "pointer" }}
     >
       <OutlineItem item={h} isActive={isActive} />
@@ -35,40 +35,63 @@ const Row = React.memo(function Row({
   );
 });
 
-export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectHeading }: Props) {
+export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectHeading }: OutlinePaneProps) {
   const activeItemRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement | null>(null);
+
+  // suppress auto-centering while the user is actively scrolling the outline
+  const userScrollUntil = useRef(0);
+  const markUserScroll = useCallback(() => { userScrollUntil.current = Date.now() + 300; }, []);
+  const isUserScrolling = () => Date.now() < userScrollUntil.current;
 
   useEffect(() => {
-    if (activeItemRef.current) {
-      activeItemRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
-      });
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', markUserScroll, { passive: true });
+    el.addEventListener('touchstart', markUserScroll, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', markUserScroll);
+      el.removeEventListener('touchstart', markUserScroll);
+    };
+  }, [markUserScroll]);
+
+  useEffect(() => {
+    if (isUserScrolling()) return; // don't fight the user
+
+    const item = activeItemRef.current;
+    const container = scrollRef.current;
+    if (!item || !container) return;
+
+    // Prefer offset math inside the scroll container (stable across small screens)
+    const itemTop = item.offsetTop;
+    const itemBottom = itemTop + item.offsetHeight;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + container.clientHeight;
+
+    const margin = 16; // give a little breathing room
+    if (itemTop < viewTop + margin) {
+      container.scrollTo({ top: Math.max(0, itemTop - margin), behavior: 'smooth' });
+    } else if (itemBottom > viewBottom - margin) {
+      container.scrollTo({ top: itemBottom - container.clientHeight + margin, behavior: 'smooth' });
     }
   }, [activeHeadingId]);
+
   return (
-    <aside style={OUTLINE_STYLES.aside}>
+    <aside ref={scrollRef} style={OUTLINE_STYLES.aside}>
       <div
         className="outline-resizer"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          onStartResize();
-        }}
+        onMouseDown={(e) => { e.preventDefault(); onStartResize(); }}
         style={OUTLINE_STYLES.resizer}
         aria-label="Resize outline"
       />
       <div style={OUTLINE_STYLES.container}>
         <div style={OUTLINE_STYLES.title}>Outline</div>
         <div style={OUTLINE_STYLES.list}>
-          {outline.map((h, i) => {
+          {outline.map((h) => {
             const isActive = h.id === activeHeadingId;
             return (
-              <div key={`${h.id}-${i}`} ref={isActive ? activeItemRef : null}>
-                <Row
-                  h={h}
-                  isActive={isActive}
-                  onClick={() => onSelectHeading(h.id)}
-                />
+              <div key={h.id} ref={isActive ? activeItemRef : null}>
+                <Row h={h} isActive={isActive} onClick={() => onSelectHeading(h.id)} />
               </div>
             );
           })}
