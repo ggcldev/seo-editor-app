@@ -2,11 +2,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Heading } from './useOutline';
 import { measureHeadingTopsBatch } from '../utils/scrollUtils';
+import { idleCallback } from '../utils/idleCallback';
 
 export type RevealMode = 'top' | 'center' | 'third';
 
 export function useScrollSpy(
-  markdown: string,
+  _markdown: string,
   outline: Heading[],
   textareaRef: React.RefObject<HTMLTextAreaElement | null>,
   revealMode: RevealMode = 'third'
@@ -41,12 +42,7 @@ export function useScrollSpy(
   // schedule recompute (idle-ish)
   const scheduleRecomputeHeadingTops = useCallback(() => {
     const run = () => recomputeHeadingTops();
-    if ('requestIdleCallback' in window) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).requestIdleCallback(run, { timeout: 200 });
-    } else {
-      setTimeout(run, 120);
-    }
+    idleCallback(run, 200);
   }, [recomputeHeadingTops]);
 
   // caret → active via binary search on outline offsets (fast)

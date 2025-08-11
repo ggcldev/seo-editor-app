@@ -12,11 +12,3 @@ html {
   scroll-behavior: smooth;
 }
 
-textarea::-webkit-scrollbar {
-  display: none;
-}
-
-textarea {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}

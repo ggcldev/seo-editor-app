@@ -18,7 +18,8 @@
       "Bash(npm run:*)",
       "Bash(gh repo list:*)",
       "Bash(git merge:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(tsc --noEmit)"
     ],
     "deny": []
   }

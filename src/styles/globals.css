@@ -1,6 +1,11 @@
-/* Hide webkit scrollbars on textarea */
+/* Hide scrollbars on textarea */
 textarea::-webkit-scrollbar {
   display: none;
+}
+
+textarea {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* CSS optimizations for high refresh rates */

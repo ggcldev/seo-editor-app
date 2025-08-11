@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toId } from "../utils/ids";
+import { idleCallback, cancelIdleCallback } from "../utils/idleCallback";
 
 export type Heading = { level: 1|2|3|4|5|6; text: string; id: string; offset: number };
 
@@ -28,22 +29,9 @@ export function useOutline(markdown: string): Heading[] {
 
   // post updates when markdown changes (with idle defer to reduce churn during typing)
   useEffect(() => {
-    let idleId: number | null = null;
     const post = () => workerRef.current?.postMessage(markdown || "");
-    if ('requestIdleCallback' in window) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      idleId = (window as any).requestIdleCallback(post, { timeout: 120 });
-    } else {
-      idleId = window.setTimeout(post, 80);
-    }
-    return () => {
-      if ('cancelIdleCallback' in window && idleId) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).cancelIdleCallback(idleId);
-      } else if (idleId) {
-        clearTimeout(idleId);
-      }
-    };
+    const idleId = idleCallback(post, 120);
+    return () => cancelIdleCallback(idleId);
   }, [markdown]);
 
   return headings;
