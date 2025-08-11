@@ -20,6 +20,7 @@ export default function App() {
   const [isResizing, setIsResizing] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resizeRaf = useRef<number | null>(null);
   const [revealMode] = useState<RevealMode>('third'); // 'top' | 'center' | 'third'
   const { htmlToMarkdown } = usePasteToMarkdown();
 
@@ -121,11 +122,16 @@ export default function App() {
   useEffect(() => {
     if (!isResizing) return;
     const onMove = (e: MouseEvent) => {
-      const shell = shellRef.current;
-      if (!shell) return;
-      const x = e.clientX - shell.getBoundingClientRect().left;
-      setOutlineWidth(Math.min(Math.max(x, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
-      scheduleRecomputeHeadingTops();
+      if (resizeRaf.current) return;
+      resizeRaf.current = requestAnimationFrame(() => {
+        resizeRaf.current = null;
+        const shell = shellRef.current;
+        if (!shell) return;
+        const x = e.clientX - shell.getBoundingClientRect().left;
+        const next = Math.min(Math.max(x, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH);
+        setOutlineWidth(next);
+        scheduleRecomputeHeadingTops();
+      });
     };
     const onUp = () => {
       setIsResizing(false);
@@ -138,6 +144,9 @@ export default function App() {
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      if (resizeRaf.current) {
+        cancelAnimationFrame(resizeRaf.current);
+      }
     };
   }, [isResizing, scheduleRecomputeHeadingTops]);
 

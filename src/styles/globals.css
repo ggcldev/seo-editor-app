@@ -2,3 +2,8 @@
 textarea::-webkit-scrollbar {
   display: none;
 }
+
+/* CSS paint optimization for scrollbar thumb */
+.custom-scrollbar-thumb {
+  will-change: transform;
+}

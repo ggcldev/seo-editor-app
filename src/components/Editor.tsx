@@ -9,7 +9,7 @@ type EditorProps = {
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
 };
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 
 const EDITOR_STYLES = {
   main: { padding: 0, background: '#f6f6f6', height: '100vh' },
@@ -100,11 +100,15 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
     onCaretChange(el.selectionStart ?? 0);
   }, [onCaretChange]);
 
+  // Memoize dynamic styles to avoid new objects every render
+  const wrapperStyle = useMemo(() => EDITOR_STYLES.wrapper(narrow), [narrow]);
+  const thumbStyle = useMemo(() => EDITOR_STYLES.scrollbar.thumb(scrollPosition, scrollThumbSize, trackHeight), [scrollPosition, scrollThumbSize, trackHeight]);
+
   return (
     <main style={EDITOR_STYLES.main}>
       <div style={EDITOR_STYLES.container}>
         <div 
-          style={EDITOR_STYLES.wrapper(narrow)}
+          style={wrapperStyle}
           onMouseEnter={showScrollbars}
           onMouseLeave={hideScrollbars}
           onMouseMove={showScrollbars}
@@ -128,7 +132,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
           />
           {showScrollbar && (
             <div style={EDITOR_STYLES.scrollbar.track}>
-              <div style={EDITOR_STYLES.scrollbar.thumb(scrollPosition, scrollThumbSize, trackHeight)} />
+              <div className="custom-scrollbar-thumb" style={thumbStyle} />
             </div>
           )}
         </div>

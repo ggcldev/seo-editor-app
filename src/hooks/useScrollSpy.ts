@@ -186,6 +186,15 @@ export function useScrollSpy(markdown: string, outline: Heading[], textareaRef: 
   // cleanup idle job on unmount
   useEffect(() => () => { if (idleJob.current) cic(idleJob.current); }, []);
 
+  // pause expensive work when tab is hidden
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) suppressScrollSpy(2000);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [suppressScrollSpy]);
+
   return {
     activeHeadingId,
     handleScroll,
