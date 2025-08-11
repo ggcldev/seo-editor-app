@@ -27,8 +27,8 @@ const EDITOR_STYLES = {
   },
   scrollbar: {
     track: {
-      position: 'fixed' as const, top: 32, right: 8, width: 8, height: 'calc(100vh - 80px)', borderRadius: 4,
-      background: 'rgba(203, 213, 225, 0.3)', pointerEvents: 'none' as const, zIndex: 1000, transition: 'opacity 0.3s ease'
+      position: 'absolute' as const, top: 32, right: 8, bottom: 16, width: 8, borderRadius: 4,
+      background: 'rgba(203, 213, 225, 0.3)', pointerEvents: 'none' as const, zIndex: 1, transition: 'opacity 0.3s ease'
     },
     thumb: (position: number, size: number) => ({
       position: 'absolute' as const, top: `${position}%`, width: '100%', height: `${size}%`,
