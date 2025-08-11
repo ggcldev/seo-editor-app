@@ -48,6 +48,8 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
   const [scrollThumbSize, setScrollThumbSize] = useState(20);
   const [trackHeight, setTrackHeight] = useState(0);
   const hideTimeoutRef = useRef<number | undefined>(undefined);
+  const scrollRaf = useRef<number | null>(null);
+  const scrollStateRef = useRef({ pos: 0, size: 20 });
 
   const showScrollbars = useCallback(() => {
     setShowScrollbar(true);
@@ -65,6 +67,9 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
       }
+      if (scrollRaf.current) {
+        cancelAnimationFrame(scrollRaf.current);
+      }
     };
   }, []);
 
@@ -73,11 +78,19 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
     
     if (scrollHeight > clientHeight) {
-      const scrollPercent = scrollTop / (scrollHeight - clientHeight);
-      setScrollPosition(scrollPercent * 100);
-      setScrollThumbSize(Math.max(20, (clientHeight / scrollHeight) * 100));
-      // Calculate track height: total height minus top/bottom padding (32 + 16 = 48)
-      setTrackHeight(clientHeight - 48);
+      const pos = (scrollTop / (scrollHeight - clientHeight)) * 100;
+      const size = Math.max(20, (clientHeight / scrollHeight) * 100);
+      scrollStateRef.current = { pos, size };
+      if (scrollRaf.current == null) {
+        scrollRaf.current = requestAnimationFrame(() => {
+          scrollRaf.current = null;
+          const { pos, size } = scrollStateRef.current;
+          setScrollPosition(pos);
+          setScrollThumbSize(size);
+          // Calculate track height: total height minus top/bottom padding (32 + 16 = 48)
+          setTrackHeight(clientHeight - 48);
+        });
+      }
     }
     onScroll(e);
   }, [onScroll, showScrollbars]);
@@ -107,7 +120,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
           <textarea
             ref={textareaRef}
             value={markdown}
-            onChange={(e) => { setMarkdown(e.target.value); onCaretChange(e.currentTarget.selectionStart ?? 0); }}
+            onChange={(e) => setMarkdown(e.target.value)}
             onPaste={onPasteMarkdown}
             onScroll={handleScroll}
             onSelect={reportCaret}

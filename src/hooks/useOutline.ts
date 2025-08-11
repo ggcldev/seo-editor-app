@@ -26,9 +26,24 @@ export function useOutline(markdown: string): Heading[] {
     return () => { w.terminate(); workerRef.current = null; };
   }, []);
 
-  // post updates when markdown changes
+  // post updates when markdown changes (with idle defer to reduce churn during typing)
   useEffect(() => {
-    workerRef.current?.postMessage(markdown || "");
+    let idleId: number | null = null;
+    const post = () => workerRef.current?.postMessage(markdown || "");
+    if ('requestIdleCallback' in window) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      idleId = (window as any).requestIdleCallback(post, { timeout: 120 });
+    } else {
+      idleId = window.setTimeout(post, 80);
+    }
+    return () => {
+      if ('cancelIdleCallback' in window && idleId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).cancelIdleCallback(idleId);
+      } else if (idleId) {
+        clearTimeout(idleId);
+      }
+    };
   }, [markdown]);
 
   return headings;
