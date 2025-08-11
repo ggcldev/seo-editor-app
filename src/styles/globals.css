@@ -1,0 +1,4 @@
+/* Hide webkit scrollbars on textarea */
+textarea::-webkit-scrollbar {
+  display: none;
+}

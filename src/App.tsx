@@ -5,6 +5,7 @@ import { useScrollSpy } from './hooks/useScrollSpy';
 import { OutlinePane } from './components/OutlinePane';
 import { Editor } from './components/Editor';
 import { scrollToOffsetExact, measureOffsetTop, type RevealMode } from './utils/scrollUtils';
+import './styles/globals.css';
 
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,
