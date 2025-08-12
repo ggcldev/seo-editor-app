@@ -1,43 +1,72 @@
 // workers/outlineWorker.ts
 export type WHeading = { level: 1|2|3|4|5|6; text: string; offset: number };
 
-self.onmessage = (e: MessageEvent<string>) => {
-  const md = (e.data || "").replace(/\r\n/g, "\n");
-  if (!md.trim()) { postMessage([]); return; }
+// Pre-compiled regex patterns for better performance
+const ATX_PATTERN = /^(#{1,6})\s+(.+)$/;
+const SETEXT_H1_PATTERN = /^=+\s*$/;
+const SETEXT_H2_PATTERN = /^-+\s*$/;
 
-  const lines = md.split("\n");
+// Optimized markdown cleaning function
+const clean = (s: string): string => {
+  // Single-pass cleaning with more efficient regex
+  return s
+    .replace(/(\*\*(.*?)\*\*|\*(.*?)\*|`(.*?)`|~~(.*?)~~|\[(.*?)\]\([^)]*\)|!\[(.*?)\]\([^)]*\))/g, 
+      (_match, _full, bold, italic, code, strike, linkText, imgAlt) => 
+        bold || italic || code || strike || linkText || imgAlt || '')
+    .replace(/#+\s*$/, '') // trailing ###
+    .trim();
+};
+
+self.onmessage = (e: MessageEvent<string>) => {
+  const md = e.data || "";
+  if (!md.trim()) { 
+    postMessage([]); 
+    return; 
+  }
+
+  // Normalize line endings once
+  const normalizedMd = md.replace(/\r\n/g, "\n");
+  const lines = normalizedMd.split("\n");
   const out: WHeading[] = [];
   let offset = 0;
-  const clean = (s: string) => s
-    .replace(/\*\*(.*?)\*\*/g, '$1')      // **bold** -> bold
-    .replace(/\*(.*?)\*/g, '$1')          // *italic* -> italic
-    .replace(/`(.*?)`/g, '$1')            // `code` -> code
-    .replace(/~~(.*?)~~/g, '$1')          // ~~strike~~ -> strike
-    .replace(/\[(.*?)\]\([^)]*\)/g, '$1') // [link](url) -> link
-    .replace(/!\[(.*?)\]\([^)]*\)/g, '$1') // ![alt](img) -> alt
-    .replace(/#+\s*$/, '')                // trailing ### 
-    .trim();
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i], next = lines[i + 1] || "";
-    const atx = line.match(/^(#{1,6})\s+(.+)$/);
+    const line = lines[i];
+    const lineLength = line.length + 1; // +1 for newline
+    
+    // Check ATX headers (# ## ### etc)
+    const atx = ATX_PATTERN.exec(line);
     if (atx) {
       const level = Math.max(1, Math.min(6, atx[1].length)) as WHeading["level"];
       const text = clean(atx[2]);
-      if (text) out.push({ level, text, offset });
-      offset += line.length + 1;
+      if (text) {
+        out.push({ level, text, offset });
+      }
+      offset += lineLength;
       continue;
     }
-    const text = clean(line);
-    if (/^=+\s*$/.test(next) && text) {
-      out.push({ level: 1, text, offset });
-      offset += line.length + 1; i++; offset += (lines[i]?.length ?? 0) + 1; continue;
+
+    // Check setext headers (underlined with = or -)
+    const next = lines[i + 1];
+    if (next) {
+      const text = clean(line);
+      if (text) {
+        if (SETEXT_H1_PATTERN.test(next)) {
+          out.push({ level: 1, text, offset });
+          offset += lineLength + next.length + 1; // Skip both lines
+          i++; 
+          continue;
+        }
+        if (SETEXT_H2_PATTERN.test(next)) {
+          out.push({ level: 2, text, offset });
+          offset += lineLength + next.length + 1; // Skip both lines
+          i++;
+          continue;
+        }
+      }
     }
-    if (/^-+\s*$/.test(next) && text) {
-      out.push({ level: 2, text, offset });
-      offset += line.length + 1; i++; offset += (lines[i]?.length ?? 0) + 1; continue;
-    }
-    offset += line.length + 1;
+    
+    offset += lineLength;
   }
 
   postMessage(out);

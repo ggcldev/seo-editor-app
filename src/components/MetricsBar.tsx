@@ -1,14 +1,26 @@
-import { useMemo } from 'react';
-import { calculateMetrics, type TextMetrics } from '../utils/metrics';
+import { memo, useState, useEffect, useCallback } from 'react';
+import { calculateMetricsThrottled, getLastMetrics, type TextMetrics } from '../utils/metrics';
 
 interface MetricsBarProps {
   markdown: string;
 }
 
-export function MetricsBar({ markdown }: MetricsBarProps) {
-  const metrics: TextMetrics = useMemo(() => calculateMetrics(markdown), [markdown]);
+// Memoized component to prevent unnecessary re-renders
+export const MetricsBar = memo(function MetricsBar({ markdown }: MetricsBarProps) {
+  const [metrics, setMetrics] = useState<TextMetrics>(getLastMetrics());
 
-  const formatNumber = (num: number) => num.toLocaleString();
+  const updateMetrics = useCallback((newMetrics: TextMetrics) => {
+    setMetrics(newMetrics);
+  }, []);
+
+  useEffect(() => {
+    calculateMetricsThrottled(markdown, updateMetrics);
+  }, [markdown, updateMetrics]);
+
+  // Optimized number formatting - avoid toLocaleString for small numbers
+  const formatNumber = useCallback((num: number) => {
+    return num < 1000 ? num.toString() : num.toLocaleString();
+  }, []);
 
   return (
     <div 
@@ -27,7 +39,8 @@ export function MetricsBar({ markdown }: MetricsBarProps) {
         display: 'flex',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        gap: '24px'
+        gap: '24px',
+        contain: 'paint size'
       }}
     >
       <span>Words: {formatNumber(metrics.words)}</span>
@@ -35,4 +48,4 @@ export function MetricsBar({ markdown }: MetricsBarProps) {
       <span>Paragraphs: {formatNumber(metrics.paragraphs)}</span>
     </div>
   );
-}
+});

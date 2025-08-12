@@ -139,7 +139,7 @@ const Row = React.memo(function Row({
   );
 });
 
-export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectHeading }: OutlinePaneProps) {
+export const OutlinePane = React.memo(function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectHeading }: OutlinePaneProps) {
   const scrollRef = useRef<HTMLElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -264,4 +264,4 @@ export function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectH
       </div>
     </aside>
   );
-}
+});
