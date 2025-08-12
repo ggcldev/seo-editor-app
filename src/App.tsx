@@ -4,6 +4,7 @@ import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { useScrollSpy } from './hooks/useScrollSpy';
 import { OutlinePane } from './components/OutlinePane';
 import { Editor } from './components/Editor';
+import { MetricsBar } from './components/MetricsBar';
 import { scrollToOffsetExact, type RevealMode } from './utils/scrollUtils';
 import './styles/globals.css';
 
@@ -154,7 +155,12 @@ export default function App() {
     <div
       ref={shellRef}
       className="editor-shell"
-      style={{ display: 'grid', gridTemplateColumns: `${outlineWidth}px 1fr`, height: '100vh' }}
+      style={{ 
+        display: 'grid', 
+        gridTemplateColumns: `${outlineWidth}px 1fr`, 
+        gridTemplateRows: '1fr auto',
+        height: '100vh' 
+      }}
     >
       <OutlinePane 
         outline={deferredOutline} 
@@ -163,16 +169,19 @@ export default function App() {
         onSelectHeading={onSelectHeading}
       />
 
-      <Editor
-        markdown={markdown}
-        setMarkdown={setMarkdown}
-        onPasteMarkdown={handlePaste}
-        onScroll={handleScroll}
-        onCaretChange={handleCaretChange}
-        narrow={narrow}
-        toggleNarrow={toggleNarrow}
-        textareaRef={textareaRef}
-      />
+      <div style={{ position: 'relative' }}>
+        <MetricsBar markdown={markdown} />
+        <Editor
+          markdown={markdown}
+          setMarkdown={setMarkdown}
+          onPasteMarkdown={handlePaste}
+          onScroll={handleScroll}
+          onCaretChange={handleCaretChange}
+          narrow={narrow}
+          toggleNarrow={toggleNarrow}
+          textareaRef={textareaRef}
+        />
+      </div>
     </div>
   );
 }

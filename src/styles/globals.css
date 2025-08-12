@@ -21,3 +21,13 @@ textarea {
 .outline-pane { 
   contain: layout paint; 
 }
+
+/* Metrics bar styling */
+.metrics-bar {
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(229, 231, 235, 0.8);
+  font-size: 11px;
+  line-height: 1;
+  user-select: none;
+  contain: paint;
+}
