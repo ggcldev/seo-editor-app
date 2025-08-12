@@ -134,3 +134,12 @@ export function measureOffsetTop(el: HTMLTextAreaElement, offset: number) {
 
   return top;
 }
+
+// Cleanup mirror for editor teardown (optional, for dynamic editor mount/unmount)
+export function disposeMirrorFor(el: HTMLTextAreaElement): void {
+  const m = MIRRORS.get(el);
+  if (m) {
+    m.remove();
+    MIRRORS.delete(el);
+  }
+}

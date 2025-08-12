@@ -29,10 +29,25 @@ self.onmessage = (e: MessageEvent<string>) => {
   const lines = normalizedMd.split("\n");
   const out: WHeading[] = [];
   let offset = 0;
+  let fenced = false; // Track if we're inside a fenced code block
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lineLength = line.length + 1; // +1 for newline
+    const trimmed = line.trim();
+    
+    // Check for fenced code block markers
+    if (trimmed.startsWith('```')) {
+      fenced = !fenced;
+      offset += lineLength;
+      continue;
+    }
+    
+    // Skip heading detection inside fenced code blocks
+    if (fenced) {
+      offset += lineLength;
+      continue;
+    }
     
     // Check ATX headers (# ## ### etc)
     const atx = ATX_PATTERN.exec(line);

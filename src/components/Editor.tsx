@@ -54,6 +54,8 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
   const hideTimeoutRef = useRef<number | undefined>(undefined);
   const scrollRaf = useRef<number | null>(null);
   const scrollStateRef = useRef({ pos: 0, size: 20 });
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  
 
   const showScrollbars = useCallback(() => {
     setShowScrollbar(true);
@@ -76,6 +78,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
       }
     };
   }, []);
+
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
     showScrollbars();
@@ -104,11 +107,12 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
     onCaretChange(el.selectionStart ?? 0);
   }, [onCaretChange]);
 
-  // Use memoized styles
+  // Use memoized styles with safe track height
   const wrapperStyle = useWrapperStyle(narrow);
-  const thumbStyle = useThumbStyle(scrollPosition, scrollThumbSize, trackHeight);
+  const safeTrackHeight = Math.max(trackHeight, 1);
+  const thumbStyle = useThumbStyle(scrollPosition, scrollThumbSize, safeTrackHeight);
 
-  // Keep typing smooth - instant updates for normal keystrokes
+  // Keep typing smooth - instant updates
   const onChangeFast = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
     setMarkdown(el.value);
@@ -143,7 +147,7 @@ export function Editor({ markdown, setMarkdown, onPasteMarkdown, onScroll, onCar
             style={EDITOR_STYLES.textarea}
           />
           {showScrollbar && (
-            <div style={EDITOR_STYLES.scrollbar.track}>
+            <div ref={trackRef} style={EDITOR_STYLES.scrollbar.track}>
               <div className="custom-scrollbar-thumb" style={thumbStyle} />
             </div>
           )}

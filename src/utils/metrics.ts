@@ -77,7 +77,7 @@ export function calculateMetrics(text: string): TextMetrics {
   };
 }
 
-// Throttled version for real-time updates
+// Throttled version for real-time updates with adaptive performance
 let throttleTimeout: number | null = null;
 let lastResult: TextMetrics = { words: 0, characters: 0, charactersNoSpaces: 0, paragraphs: 0, readingTime: 0 };
 
@@ -105,4 +105,11 @@ export function calculateMetricsThrottled(text: string, callback: (metrics: Text
 
 export function getLastMetrics(): TextMetrics {
   return lastResult;
+}
+
+export function cancelMetricsThrottle(): void {
+  if (throttleTimeout) {
+    clearTimeout(throttleTimeout);
+    throttleTimeout = null;
+  }
 }

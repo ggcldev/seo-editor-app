@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useCallback } from 'react';
-import { calculateMetricsThrottled, getLastMetrics, type TextMetrics } from '../utils/metrics';
+import { calculateMetricsThrottled, getLastMetrics, cancelMetricsThrottle, type TextMetrics } from '../utils/metrics';
 
 interface MetricsBarProps {
   markdown: string;
@@ -17,10 +17,16 @@ export const MetricsBar = memo(function MetricsBar({ markdown }: MetricsBarProps
     calculateMetricsThrottled(markdown, updateMetrics);
   }, [markdown, updateMetrics]);
 
+  // Ensure any pending throttle is cleared on unmount (route changes, etc.)
+  useEffect(() => {
+    return () => { cancelMetricsThrottle(); };
+  }, []);
+
   // Optimized number formatting - avoid toLocaleString for small numbers
   const formatNumber = useCallback((num: number) => {
     return num < 1000 ? num.toString() : num.toLocaleString();
   }, []);
+
 
   return (
     <div 

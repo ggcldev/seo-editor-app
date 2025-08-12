@@ -20,20 +20,6 @@ const OUTLINE_STYLES = {
     color: '#4b5563',
     borderRadius: 6
   } as const,
-  mutedBtn: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: 500,
-    background: 'transparent',
-    border: 'none',
-    padding: '2px 4px',
-    cursor: 'pointer',
-    borderRadius: 4,
-    lineHeight: 1.2
-  } as const,
-  mutedBtnHover: {
-    background: '#f3f4f6'
-  } as const
 } as const;
 
 type OutlinePaneProps = {
@@ -219,9 +205,7 @@ export const OutlinePane = React.memo(function OutlinePane({ outline, activeHead
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               type="button"
-              style={OUTLINE_STYLES.mutedBtn}
-              onMouseEnter={(e) => Object.assign(e.currentTarget.style, OUTLINE_STYLES.mutedBtnHover)}
-              onMouseLeave={(e) => Object.assign(e.currentTarget.style, OUTLINE_STYLES.mutedBtn)}
+              className="outline-muted-btn"
               onClick={() => setCollapsed(new Set())}
               title="Expand all"
             >
@@ -229,9 +213,7 @@ export const OutlinePane = React.memo(function OutlinePane({ outline, activeHead
             </button>
             <button
               type="button"
-              style={OUTLINE_STYLES.mutedBtn}
-              onMouseEnter={(e) => Object.assign(e.currentTarget.style, OUTLINE_STYLES.mutedBtnHover)}
-              onMouseLeave={(e) => Object.assign(e.currentTarget.style, OUTLINE_STYLES.mutedBtn)}
+              className="outline-muted-btn"
               onClick={() =>
                 setCollapsed(new Set(outline.filter((_, i) => hasChildren(outline, i)).map(h => h.id)))
               }
