@@ -6,7 +6,7 @@ import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
 import type { EditorView } from '@codemirror/view';
 import { MetricsBar } from './components/MetricsBar';
-import { type RevealMode } from './utils/scrollUtils';
+import { type RevealMode } from './hooks/useScrollSpy';
 import './styles/globals.css';
 
 const OUTLINE_CONFIG = {
@@ -22,7 +22,7 @@ export default function App() {
   const [isResizing, setIsResizing] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const cmRef = useRef<CMHandle>(null);
-  const cmViewRef = useRef<EditorView | null>(null);
+  const [cmView, setCmView] = useState<EditorView | null>(null);
   const resizeRaf = useRef<number | null>(null);
   const [revealMode] = useState<RevealMode>('third'); // 'top' | 'center' | 'third'
   const { htmlToMarkdown } = usePasteToMarkdown();
@@ -31,10 +31,10 @@ export default function App() {
   const outline = useOutline(markdown);
   const deferredOutline = useDeferredValue(outline); // <- render later if typing
   const {
-    activeHeadingId, handleScroll, handleCaretChange,
+    activeHeadingId, handleViewportChange, handleCaretChange,
     suppressScrollSpy, lockActiveTo, clearLock,
     recomputeHeadingTops, scheduleRecomputeHeadingTops
-  } = useScrollSpy(markdown, deferredOutline, { current: null } as any, revealMode, cmViewRef);
+  } = useScrollSpy(markdown, deferredOutline, { current: null } as any, revealMode, cmView);
 
 
   // Extract callbacks for stable references
@@ -162,11 +162,11 @@ export default function App() {
           ref={cmRef}
           markdown={markdown}
           setMarkdown={setMarkdown}
-          onScroll={handleScroll}
           onCaretChange={handleCaretChange}
           narrow={narrow}
           toggleNarrow={toggleNarrow}
-          onReady={(view) => { cmViewRef.current = view; }}
+          onReady={setCmView}
+          onViewportChange={handleViewportChange}
         />
       </div>
     </div>

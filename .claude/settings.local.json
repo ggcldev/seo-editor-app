@@ -19,7 +19,9 @@
       "Bash(gh repo list:*)",
       "Bash(git merge:*)",
       "Bash(git checkout:*)",
-      "Bash(tsc --noEmit)"
+      "Bash(tsc --noEmit)",
+      "Bash(node:*)",
+      "Bash(npm outdated)"
     ],
     "deny": []
   }

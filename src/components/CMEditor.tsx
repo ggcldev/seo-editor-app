@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
@@ -6,13 +6,13 @@ import { markdown as mdLang } from "@codemirror/lang-markdown";
 import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
 
 type Props = {
-  markdown: string;
-  setMarkdown: (v: string) => void;
-  onScroll: (e?: unknown) => void;           // keep prop for parity
-  onCaretChange: (pos: number) => void;
+  markdown: string;                              // current doc text
+  setMarkdown: (v: string) => void;              // propagate changes up
+  onCaretChange: (pos: number) => void;           // selection head
   narrow: boolean;
   toggleNarrow: () => void;
-  onReady?: (view: EditorView) => void; // NEW
+  onReady?: (view: EditorView) => void;           // informs parent about the live EditorView
+  onViewportChange?: () => void;                  // NEW
 };
 
 export type CMHandle = {
@@ -23,57 +23,76 @@ export type CMHandle = {
 
 const STYLES = {
   main: { padding: 0, background: "#f6f6f6", height: "100vh" },
-  container: { height: "100%", padding: 24, boxSizing: "border-box" as const, display: "flex", justifyContent: "center" },
-  wrapper: (narrow: boolean) => ({ position: "relative" as const, width: "100%", maxWidth: narrow ? 760 : "100%", overflow: "hidden" }),
+  container: {
+    height: "100%",
+    padding: 24,
+    boxSizing: "border-box" as const,
+    display: "flex",
+    justifyContent: "center"
+  },
+  wrapper: (narrow: boolean) =>
+    ({
+      position: "relative",
+      width: "100%",
+      maxWidth: narrow ? 760 : "100%",
+      overflow: "hidden"
+    } as const),
   button: {
-    position: "absolute" as const, top: 8, right: 8, zIndex: 1, fontSize: 12, padding: "6px 10px",
-    borderRadius: 8, border: "1px solid #e5e7eb", background: "#ffffff", color: "#374151", cursor: "pointer"
+    position: "absolute" as const,
+    top: 8,
+    right: 8,
+    zIndex: 1,
+    fontSize: 12,
+    padding: "6px 10px",
+    borderRadius: 8,
+    border: "1px solid #e5e7eb",
+    background: "#ffffff",
+    color: "#374151",
+    cursor: "pointer"
   },
-  editorHost: { 
-    height: "calc(100vh - 48px)", 
-    paddingTop: 32, 
-    background: "#f6f6f6",
-    fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace",
-    fontSize: "14px",
-    lineHeight: "1.5"
-  },
-  scrollbarTrack: {
-    position: "absolute" as const, top: 32, right: 8, bottom: 16, width: 8, borderRadius: 4,
-    background: "rgba(203, 213, 225, 0.3)", pointerEvents: "none" as const, zIndex: 1, transition: "opacity 0.3s ease"
-  },
-  scrollbarThumb: (topPx: number, heightPct: number) => ({
-    position: "absolute" as const, top: `${Math.round(topPx)}px`, width: "100%",
-    height: `${heightPct}%`, background: "#cbd5e1", borderRadius: 4, transition: "transform 0.1s ease"
-  })
+  editorHost: {
+    height: "calc(100vh - 48px)",
+    width: "100%",
+    paddingTop: 32,
+    background: "#f6f6f6"
+  }
 } as const;
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onScroll, onCaretChange, narrow, toggleNarrow, onReady }, ref
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, onViewportChange },
+  ref
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
-  // custom scrollbar state (matches your previous overlay)
-  const [showScrollbar, setShowScrollbar] = useState(false);
-  const [thumbTopPx, setThumbTopPx] = useState(0);
-  const [thumbSizePct, setThumbSizePct] = useState(20);
-  const hideTimeoutRef = useRef<number | undefined>(undefined);
-  const trackRef = useRef<HTMLDivElement | null>(null);
+  // Keep latest callbacks in refs so the editor init effect can be [] (init once)
+  const onChangeRef = useRef(setMarkdown);
+  const onCaretRef = useRef(onCaretChange);
+  const onReadyRef = useRef(onReady);
+  const onViewportChangeRef = useRef(onViewportChange);
 
-  const showScrollbars = useMemo(() => {
-    return () => {
-      setShowScrollbar(true);
-      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-      hideTimeoutRef.current = window.setTimeout(() => setShowScrollbar(false), 900);
-    };
-  }, []);
-  useEffect(() => () => { if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current); }, []);
-
-  const { htmlToMarkdown } = usePasteToMarkdown();
-
-  // init view
   useEffect(() => {
-    if (viewRef.current) return;
+    onChangeRef.current = setMarkdown;
+  }, [setMarkdown]);
+  useEffect(() => {
+    onCaretRef.current = onCaretChange;
+  }, [onCaretChange]);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange;
+  }, [onViewportChange]);
+
+  // HTML→Markdown paste converter (from your hook)
+  const { htmlToMarkdown } = usePasteToMarkdown();
+  const htmlToMdRef = useRef(htmlToMarkdown);
+  useEffect(() => {
+    htmlToMdRef.current = htmlToMarkdown;
+  }, [htmlToMarkdown]);
+
+  // Initialize CodeMirror ONCE (Strict-Mode safe with proper cleanup)
+  useEffect(() => {
     const state = EditorState.create({
       doc: markdown,
       extensions: [
@@ -82,136 +101,130 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         mdLang(),
         EditorView.lineWrapping,
         highlightActiveLine(),
-        // Basic theme to match your editor style
+        // Layout/theme to ensure scrolling is enabled and smooth
         EditorView.theme({
-          "&": {
-            fontSize: "14px",
-            fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace"
+          "&": { height: "100%" },
+          ".cm-scroller": {
+            overflow: "auto",
+            height: "100%",
+            WebkitOverflowScrolling: "touch" as any
           },
           ".cm-content": {
-            padding: "16px",
-            minHeight: "100%",
-            backgroundColor: "#f6f6f6"
-          },
-          ".cm-editor": {
-            height: "100%",
-            backgroundColor: "#f6f6f6"
-          },
-          ".cm-scroller": {
-            fontFamily: "inherit"
-          },
-          ".cm-focused": {
-            outline: "none"
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+            fontSize: "14px",
+            lineHeight: "1.8"
           }
         }),
-        // sync to React
+        // Sync CM → React
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) setMarkdown(u.state.doc.toString());
-          if (u.selectionSet) onCaretChange(u.state.selection.main.head);
-          if (u.viewportChanged) onScroll?.();
+          if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+          if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
+          // NOTE: do NOT rely on u.viewportChanged alone — some scrolls won't produce a view update
         }),
-        // HTML→Markdown paste (like your textarea handler)
+        // DOM event plumbing: HTML→MD paste only
         EditorView.domEventHandlers({
           paste: (event, view) => {
             const html = (event as ClipboardEvent).clipboardData?.getData("text/html");
             if (!html) return false;
             event.preventDefault();
-            const md = htmlToMarkdown(html);
+            const md = htmlToMdRef.current(html);
             const sel = view.state.selection.main;
             view.dispatch({
               changes: { from: sel.from, to: sel.to, insert: md },
               selection: { anchor: sel.from + md.length }
             });
             return true;
-          },
-          scroll: () => onScroll?.(),
-          mousemove: () => showScrollbars(),
-          mouseenter: () => showScrollbars()
+          }
         })
       ]
     });
-    const view = new EditorView({ state, parent: hostRef.current! });
-    viewRef.current = view;
-    // notify parent so hooks can use the live view instance
-    onReady?.(view);
-    return () => view.destroy();
-  }, [markdown, setMarkdown, onCaretChange, onScroll, htmlToMarkdown, showScrollbars]);
 
-  // external value updates (rare—kept for parity)
+    const parent = hostRef.current;
+    if (!parent) return;
+    const view = new EditorView({ state, parent });
+    viewRef.current = view;
+    onReadyRef.current?.(view);
+
+    // 🔔 Tell scroll-spy whenever the viewport moves (scroll or resize), throttled to rAF
+    let ticking = false;
+    const emit = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        onViewportChangeRef.current?.();
+      });
+    };
+
+    const sc = view.scrollDOM;
+    sc.addEventListener('scroll', emit, { passive: true });
+    const ro = new ResizeObserver(emit);
+    ro.observe(sc);
+
+    // initial compute
+    onViewportChangeRef.current?.();
+
+    return () => {
+      sc.removeEventListener('scroll', emit);
+      ro.disconnect();
+      view.destroy();
+      viewRef.current = null; // important for Strict Mode remounts
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // init once
+
+  // External prop → editor doc sync (preserve selection)
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const cur = view.state.doc.toString();
     if (cur !== markdown) {
-      const tr = view.state.update({ changes: { from: 0, to: cur.length, insert: markdown } });
-      view.dispatch(tr);
+      const sel = view.state.selection.main;
+      view.dispatch({
+        changes: { from: 0, to: cur.length, insert: markdown },
+        selection: { anchor: Math.min(markdown.length, sel.anchor) }
+      });
     }
   }, [markdown]);
 
-  // custom thumb: read from scrollDOM (rAF not needed unless you want)
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
-    const sc = view.scrollDOM;
-    const onScroll = () => {
-      showScrollbars();
-      const { scrollTop, scrollHeight, clientHeight } = sc;
-      if (scrollHeight > clientHeight) {
-        const posPct = (scrollTop / (scrollHeight - clientHeight)) * 100;
-        const sizePct = Math.max(20, (clientHeight / scrollHeight) * 100);
-        const trackH = trackRef.current?.getBoundingClientRect().height ?? 1;
-        const topPx = (posPct / 100) * (trackH - (sizePct / 100) * trackH);
-        setThumbTopPx(topPx);
-        setThumbSizePct(sizePct);
+  // Expose helpers to parent
+  useImperativeHandle(
+    ref,
+    () => ({
+      setSelectionAt(pos: number) {
+        const view = viewRef.current;
+        if (!view) return;
+        view.dispatch({ selection: { anchor: pos } });
+        view.focus();
+      },
+      scrollToOffsetExact(pos: number, bias: "top" | "center" | "third" = "third") {
+        const y = bias === "top" ? "start" : "center"; // 'third' behaves like center in CM
+        viewRef.current?.dispatch({ effects: EditorView.scrollIntoView(pos, { y }) });
+      },
+      getView() {
+        return viewRef.current;
       }
-    };
-    sc.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => sc.removeEventListener("scroll", onScroll);
-  }, [showScrollbars]);
-
-  useImperativeHandle(ref, () => ({
-    setSelectionAt(pos: number) {
-      const view = viewRef.current;
-      if (!view) return;
-      view.dispatch({ selection: { anchor: pos } });
-      view.focus();
-    },
-    scrollToOffsetExact(pos: number, bias: "top" | "center" | "third" = "third") {
-      const y = bias === "top" ? "start" : "center";
-      viewRef.current?.dispatch({ effects: EditorView.scrollIntoView(pos, { y }) });
-    },
-    getView() {
-      return viewRef.current;
-    }
-  }), []);
+    }),
+    []
+  );
 
   const wrapperStyle = useMemo(() => STYLES.wrapper(narrow), [narrow]);
 
   return (
     <main style={STYLES.main}>
       <div style={STYLES.container}>
-        <div
-          style={wrapperStyle}
-          onMouseEnter={showScrollbars}
-          onMouseMove={showScrollbars}
-        >
+        <div style={wrapperStyle}>
           <button
             type="button"
             onClick={toggleNarrow}
             style={STYLES.button}
-            aria-label={narrow ? 'Switch to full width' : 'Switch to narrow width'}
+            aria-label={narrow ? "Switch to full width" : "Switch to narrow width"}
           >
-            {narrow ? 'Full width' : 'Squeeze'}
+            {narrow ? "Full width" : "Squeeze"}
           </button>
 
           <div ref={hostRef} style={STYLES.editorHost} />
-
-          {showScrollbar && (
-            <div ref={trackRef} style={STYLES.scrollbarTrack}>
-              <div className="custom-scrollbar-thumb" style={STYLES.scrollbarThumb(thumbTopPx, thumbSizePct)} />
-            </div>
-          )}
         </div>
       </div>
     </main>
