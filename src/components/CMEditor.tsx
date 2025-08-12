@@ -5,6 +5,8 @@ import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
 import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
 
+const DEBUG = false; // ← performance: no more scroll logging
+
 type Props = {
   markdown: string;                              // current doc text
   setMarkdown: (v: string) => void;              // propagate changes up
@@ -120,7 +122,10 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
-          // NOTE: do NOT rely on u.viewportChanged alone — some scrolls won't produce a view update
+          if (u.viewportChanged) {
+            if (DEBUG) console.log('[cm] viewportChanged');
+            onViewportChangeRef.current?.();
+          }
         }),
         // DOM event plumbing: HTML→MD paste only
         EditorView.domEventHandlers({
@@ -147,27 +152,26 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     onReadyRef.current?.(view);
 
     // 🔔 Tell scroll-spy whenever the viewport moves (scroll or resize), throttled to rAF
-    let ticking = false;
+    let raf = 0;
     const emit = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        ticking = false;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (DEBUG) console.log('[cm] scroll/resize emit');
         onViewportChangeRef.current?.();
       });
     };
 
     const sc = view.scrollDOM;
     sc.addEventListener('scroll', emit, { passive: true });
-    const ro = new ResizeObserver(emit);
-    ro.observe(sc);
+    window.addEventListener('resize', emit);
 
     // initial compute
     onViewportChangeRef.current?.();
 
     return () => {
       sc.removeEventListener('scroll', emit);
-      ro.disconnect();
+      window.removeEventListener('resize', emit);
+      cancelAnimationFrame(raf);
       view.destroy();
       viewRef.current = null; // important for Strict Mode remounts
     };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useDeferredValue, startTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useDeferredValue, startTransition, useMemo } from 'react';
 import { useOutline } from './hooks/useOutline';
 import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
 import { useScrollSpy } from './hooks/useScrollSpy';
@@ -7,7 +7,10 @@ import { CMEditor, type CMHandle } from './components/CMEditor';
 import type { EditorView } from '@codemirror/view';
 import { MetricsBar } from './components/MetricsBar';
 import { type RevealMode } from './hooks/useScrollSpy';
+import { normalizeEOL } from './utils/eol';
 import './styles/globals.css';
+
+const DEBUG = false; // ← performance: no more scroll logging
 
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,
@@ -16,7 +19,13 @@ const OUTLINE_CONFIG = {
 };
 
 export default function App() {
-  const [markdown, setMarkdown] = useState('');
+  const [markdown, _setMarkdown] = useState('');
+  const setMarkdown = useCallback((v: string) => {
+    _setMarkdown(prev => {
+      const nv = normalizeEOL(v);
+      return nv === prev ? prev : nv;
+    });
+  }, []);
   const [narrow, setNarrow] = useState(false);
   const [outlineWidth, setOutlineWidth] = useState(OUTLINE_CONFIG.DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
@@ -34,7 +43,7 @@ export default function App() {
     activeHeadingId, handleViewportChange, handleCaretChange,
     suppressScrollSpy, lockActiveTo, clearLock,
     recomputeHeadingTops, scheduleRecomputeHeadingTops
-  } = useScrollSpy(markdown, deferredOutline, { current: null } as any, revealMode, cmView);
+  } = useScrollSpy(markdown, outline, { current: null } as any, revealMode, cmView);
 
 
   // Extract callbacks for stable references
@@ -94,7 +103,8 @@ export default function App() {
 
   // Schedule recompute on markdown changes (idle, non-blocking)
   useEffect(() => {
-    scheduleRecomputeHeadingTops();
+    if (DEBUG) console.log('[app] markdown len', markdown.length, 'outline len', outline.length);
+    scheduleRecomputeHeadingTops(); // triggers spy compute (noop if not ready)
   }, [scheduleRecomputeHeadingTops, markdown]);
 
   // Schedule recompute on window resize (idle, non-blocking)
@@ -106,6 +116,11 @@ export default function App() {
 
   // Body class leak guard - ensure 'noselect' is cleaned up on unmount
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
+
+  // optional: watch active id
+  useEffect(() => {
+    if (DEBUG) console.log('[app] activeHeadingId →', activeHeadingId);
+  }, [activeHeadingId]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -165,7 +180,7 @@ export default function App() {
           onCaretChange={handleCaretChange}
           narrow={narrow}
           toggleNarrow={toggleNarrow}
-          onReady={setCmView}
+          onReady={(v) => { if (DEBUG) console.log('[app] cm ready'); setCmView(v); }}
           onViewportChange={handleViewportChange}
         />
       </div>

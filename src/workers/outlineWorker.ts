@@ -24,9 +24,8 @@ self.onmessage = (e: MessageEvent<string>) => {
     return; 
   }
 
-  // Normalize line endings once
-  const normalizedMd = md.replace(/\r\n/g, "\n");
-  const lines = normalizedMd.split("\n");
+  // Input is already normalized in App.tsx
+  const lines = md.split("\n");
   const out: WHeading[] = [];
   let offset = 0;
   let fenced = false; // Track if we're inside a fenced code block
