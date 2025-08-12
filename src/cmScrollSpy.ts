@@ -18,7 +18,8 @@ export function scrollSpyPlugin(
     private frame: number | null = null;
     private resizeObserver: ResizeObserver;
     private lastActiveId: string | null = null;
-    private lastChangeTime = 0;
+    private lastSwitchAt = 0;
+    private readonly HYSTERESIS_MS = 90;
 
     constructor() {
       // run once immediately so we get an initial active heading on mount
@@ -70,18 +71,28 @@ export function scrollSpyPlugin(
         if (outline[mid].offset <= pos) { ans = mid; lo = mid + 1; }
         else hi = mid - 1;
       }
-      const id = ans >= 0 ? outline[ans].id : outline[0].id;
+      const nextId = ans >= 0 ? outline[ans].id : outline[0].id;
       
-      // Add hysteresis to prevent rapid flickering at boundaries
-      const now = Date.now();
-      if (id !== this.lastActiveId) {
-        // If we've changed recently (within 80ms), ignore rapid changes
-        if (now - this.lastChangeTime < 80) {
-          return;
+      if (!nextId) return;
+      
+      const now = performance.now();
+      const cur = this.lastActiveId;
+      
+      // Only switch if enough time has passed since the last change
+      if (nextId !== cur) {
+        // if we're about to change to a different id than the last emitted one,
+        // check the hysteresis window
+        if (this.lastActiveId !== nextId) {
+          if (now - this.lastSwitchAt < this.HYSTERESIS_MS) {
+            return; // chill a bit longer
+          }
+          this.lastSwitchAt = now;
+          this.lastActiveId = nextId;
         }
-        this.lastActiveId = id;
-        this.lastChangeTime = now;
-        onActive(id);
+        onActive(nextId);
+      } else {
+        // keep lastId up to date when we're stable
+        this.lastActiveId = cur;
       }
     }
     }();

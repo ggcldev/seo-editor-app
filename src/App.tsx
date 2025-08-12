@@ -96,14 +96,41 @@ Final deep content.`);
     return h.offset + trimmed.length;
   }
 
-  // Heading click (jump) still uses scrollIntoView
+  // Helper for smooth scrolling with center positioning and margin
+  function smoothScrollToCenter(view: EditorView, pos: number, margin = 24, bias = 0.5) {
+    const rect = view.coordsAtPos(pos);
+    if (!rect) return;
+
+    const sc = view.scrollDOM;
+    const scRect = sc.getBoundingClientRect();
+
+    // Anchor row we want to land around (bias: 0=top, .5=center, .33≈one-third)
+    const anchorDelta = sc.clientHeight * bias;
+
+    const targetTop =
+      (rect.top - scRect.top)  // row's Y inside scroller
+      + sc.scrollTop           // current scroll offset
+      - anchorDelta            // bias to center/third
+      - margin;                // pleasant breathing room
+
+    sc.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+  }
+
+  // Heading click (jump) with smooth scroll to center
   const onSelectHeading = useCallback((id: string) => {
     const h = deferredOutline.find(o => o.id === id);
     if (!h) return;
-    // caret at end of heading line (same helper you had)
+    
+    // caret at end of heading line
     const pos = caretAtHeadingEnd(markdown, h);
     cmRef.current?.setSelectionAt(pos);
-    cmRef.current?.scrollToOffsetExact(h.offset, "center");
+    
+    // Use smooth scroll to center with margin
+    const view = cmRef.current?.getView();
+    if (view) {
+      smoothScrollToCenter(view, h.offset, 24, 0.5); // center with 24px margin
+    }
+    
     // Optimistically set active (plugin will confirm next frame)
     setActiveHeadingId(id);
   }, [deferredOutline, markdown]);
