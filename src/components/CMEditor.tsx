@@ -4,8 +4,9 @@ import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
 import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
+import { scrollSpyPlugin } from "../cmScrollSpy";
+import type { Heading } from "../hooks/useOutline";
 
-const DEBUG = false; // ← performance: no more scroll logging
 
 type Props = {
   markdown: string;                              // current doc text
@@ -14,7 +15,9 @@ type Props = {
   narrow: boolean;
   toggleNarrow: () => void;
   onReady?: (view: EditorView) => void;           // informs parent about the live EditorView
-  onViewportChange?: () => void;                  // NEW
+  // NEW:
+  getOutline: () => Heading[];
+  onActiveHeadingChange: (id: string | null) => void;
 };
 
 export type CMHandle = {
@@ -61,7 +64,7 @@ const STYLES = {
 } as const;
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, onViewportChange },
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, getOutline, onActiveHeadingChange },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -71,7 +74,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
   const onReadyRef = useRef(onReady);
-  const onViewportChangeRef = useRef(onViewportChange);
+  const getOutlineRef = useRef(getOutline);
+  const onActiveHeadingChangeRef = useRef(onActiveHeadingChange);
 
   useEffect(() => {
     onChangeRef.current = setMarkdown;
@@ -83,8 +87,11 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     onReadyRef.current = onReady;
   }, [onReady]);
   useEffect(() => {
-    onViewportChangeRef.current = onViewportChange;
-  }, [onViewportChange]);
+    getOutlineRef.current = getOutline;
+  }, [getOutline]);
+  useEffect(() => {
+    onActiveHeadingChangeRef.current = onActiveHeadingChange;
+  }, [onActiveHeadingChange]);
 
   // HTML→Markdown paste converter (from your hook)
   const { htmlToMarkdown } = usePasteToMarkdown();
@@ -122,10 +129,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
-          if (u.viewportChanged) {
-            if (DEBUG) console.log('[cm] viewportChanged');
-            onViewportChangeRef.current?.();
-          }
         }),
         // DOM event plumbing: HTML→MD paste only
         EditorView.domEventHandlers({
@@ -141,7 +144,13 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             });
             return true;
           }
-        })
+        }),
+        // 🔥 Native CM6 scroll-spy
+        scrollSpyPlugin(
+          () => getOutlineRef.current(),
+          (id) => onActiveHeadingChangeRef.current(id),
+          "center"
+        ),
       ]
     });
 
@@ -151,27 +160,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     viewRef.current = view;
     onReadyRef.current?.(view);
 
-    // 🔔 Tell scroll-spy whenever the viewport moves (scroll or resize), throttled to rAF
-    let raf = 0;
-    const emit = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (DEBUG) console.log('[cm] scroll/resize emit');
-        onViewportChangeRef.current?.();
-      });
-    };
-
-    const sc = view.scrollDOM;
-    sc.addEventListener('scroll', emit, { passive: true });
-    window.addEventListener('resize', emit);
-
-    // initial compute
-    onViewportChangeRef.current?.();
-
     return () => {
-      sc.removeEventListener('scroll', emit);
-      window.removeEventListener('resize', emit);
-      cancelAnimationFrame(raf);
       view.destroy();
       viewRef.current = null; // important for Strict Mode remounts
     };

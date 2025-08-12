@@ -34,3 +34,8 @@
 .outline-muted-btn:hover {
   background: #f3f4f6;
 }
+
+/* Ensure only CM scroller scrolls inside editor column */
+.editor-shell > div:nth-child(2) { /* the editor column wrapper */
+  overflow: hidden;
+}

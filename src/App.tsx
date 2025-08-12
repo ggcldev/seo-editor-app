@@ -1,16 +1,12 @@
-import { useCallback, useEffect, useRef, useState, useDeferredValue, startTransition, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useDeferredValue } from 'react';
 import { useOutline } from './hooks/useOutline';
-import { usePasteToMarkdown } from './hooks/usePasteToMarkdown';
-import { useScrollSpy } from './hooks/useScrollSpy';
 import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
 import type { EditorView } from '@codemirror/view';
 import { MetricsBar } from './components/MetricsBar';
-import { type RevealMode } from './hooks/useScrollSpy';
 import { normalizeEOL } from './utils/eol';
 import './styles/globals.css';
 
-const DEBUG = false; // ← performance: no more scroll logging
 
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,
@@ -19,7 +15,41 @@ const OUTLINE_CONFIG = {
 };
 
 export default function App() {
-  const [markdown, _setMarkdown] = useState('');
+  const [markdown, _setMarkdown] = useState(`# First Heading
+
+This is some content under the first heading.
+
+## Second Heading
+
+More content here.
+
+### Third Heading
+
+Even more content.
+
+## Fourth Heading
+
+Final content.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+
+Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+
+# Another Section
+
+More content to make it scrollable...
+
+## Subsection
+
+Even more text here to create a longer document that will actually need scrolling.
+
+### Deep subsection
+
+Final deep content.`);
   const setMarkdown = useCallback((v: string) => {
     _setMarkdown(prev => {
       const nv = normalizeEOL(v);
@@ -31,19 +61,15 @@ export default function App() {
   const [isResizing, setIsResizing] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const cmRef = useRef<CMHandle>(null);
-  const [cmView, setCmView] = useState<EditorView | null>(null);
+  const [, setCmView] = useState<EditorView | null>(null);
   const resizeRaf = useRef<number | null>(null);
-  const [revealMode] = useState<RevealMode>('third'); // 'top' | 'center' | 'third'
-  const { htmlToMarkdown } = usePasteToMarkdown();
-
 
   const outline = useOutline(markdown);
   const deferredOutline = useDeferredValue(outline); // <- render later if typing
-  const {
-    activeHeadingId, handleViewportChange, handleCaretChange,
-    suppressScrollSpy, lockActiveTo, clearLock,
-    recomputeHeadingTops, scheduleRecomputeHeadingTops
-  } = useScrollSpy(markdown, outline, { current: null } as any, revealMode, cmView);
+
+  // NEW: active heading controlled purely by CM plugin
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  const getOutline = useCallback(() => deferredOutline, [deferredOutline]);
 
 
   // Extract callbacks for stable references
@@ -70,57 +96,21 @@ export default function App() {
     return h.offset + trimmed.length;
   }
 
-  // Handle heading selection with exact pixel positioning and lock mechanism
+  // Heading click (jump) still uses scrollIntoView
   const onSelectHeading = useCallback((id: string) => {
     const h = deferredOutline.find(o => o.id === id);
-    const view = cmRef.current?.getView();
-    if (!h || !view) return;
-
-    // lock + suppress scroll spy while animating
-    lockActiveTo(h.id, 1000);
-    suppressScrollSpy(1000);
-
-    // place caret at end of heading
+    if (!h) return;
+    // caret at end of heading line (same helper you had)
     const pos = caretAtHeadingEnd(markdown, h);
     cmRef.current?.setSelectionAt(pos);
-    handleCaretChange(pos);
+    cmRef.current?.scrollToOffsetExact(h.offset, "center");
+    // Optimistically set active (plugin will confirm next frame)
+    setActiveHeadingId(id);
+  }, [deferredOutline, markdown]);
 
-    // ⬅️ recompute tops immediately for accurate tracking
-    recomputeHeadingTops();
-
-    // ✅ wait one paint, then animate scroll reliably
-    requestAnimationFrame(() => {
-      cmRef.current?.scrollToOffsetExact(h.offset, revealMode);
-      // keep your lock lifecycle the same
-      requestAnimationFrame(() => {
-        clearLock();
-        handleCaretChange(pos);
-        recomputeHeadingTops();
-      });
-    });
-  }, [deferredOutline, markdown, revealMode, lockActiveTo, suppressScrollSpy, handleCaretChange, clearLock, recomputeHeadingTops]);
-
-
-  // Schedule recompute on markdown changes (idle, non-blocking)
-  useEffect(() => {
-    if (DEBUG) console.log('[app] markdown len', markdown.length, 'outline len', outline.length);
-    scheduleRecomputeHeadingTops(); // triggers spy compute (noop if not ready)
-  }, [scheduleRecomputeHeadingTops, markdown]);
-
-  // Schedule recompute on window resize (idle, non-blocking)
-  useEffect(() => {
-    const onResize = () => scheduleRecomputeHeadingTops();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [scheduleRecomputeHeadingTops]);
 
   // Body class leak guard - ensure 'noselect' is cleaned up on unmount
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
-
-  // optional: watch active id
-  useEffect(() => {
-    if (DEBUG) console.log('[app] activeHeadingId →', activeHeadingId);
-  }, [activeHeadingId]);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -133,14 +123,11 @@ export default function App() {
         const x = e.clientX - shell.getBoundingClientRect().left;
         const next = Math.min(Math.max(x, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH);
         setOutlineWidth(next);
-        scheduleRecomputeHeadingTops();
       });
     };
     const onUp = () => {
       setIsResizing(false);
       document.body.classList.remove('noselect');
-      // Recompute heading tops after resize is complete
-      scheduleRecomputeHeadingTops();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp, { once: true });
@@ -151,7 +138,7 @@ export default function App() {
         cancelAnimationFrame(resizeRaf.current);
       }
     };
-  }, [isResizing, scheduleRecomputeHeadingTops]);
+  }, [isResizing]);
 
   return (
     <div
@@ -177,11 +164,13 @@ export default function App() {
           ref={cmRef}
           markdown={markdown}
           setMarkdown={setMarkdown}
-          onCaretChange={handleCaretChange}
+          onCaretChange={() => { /* keep if you want caret-driven behaviors */ }}
           narrow={narrow}
           toggleNarrow={toggleNarrow}
-          onReady={(v) => { if (DEBUG) console.log('[app] cm ready'); setCmView(v); }}
-          onViewportChange={handleViewportChange}
+          onReady={setCmView}
+          // NEW:
+          getOutline={getOutline}
+          onActiveHeadingChange={setActiveHeadingId}
         />
       </div>
     </div>
