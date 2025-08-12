@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Heading } from './useOutline';
 import { measureHeadingTopsBatch } from '../utils/scrollUtils';
+import { measureHeadingTopsBatchCM } from '../utils/cmMeasure';
+import type { EditorView } from '@codemirror/view';
 import { idleCallback } from '../utils/idleCallback';
 
 export type RevealMode = 'top' | 'center' | 'third';
@@ -10,7 +12,8 @@ export function useScrollSpy(
   _markdown: string,
   outline: Heading[],
   textareaRef: React.RefObject<HTMLTextAreaElement | null>,
-  revealMode: RevealMode = 'third'
+  revealMode: RevealMode = 'third',
+  cmViewRef?: React.RefObject<EditorView | null>
 ) {
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(outline[0]?.id ?? null);
   const activeHeadingIdRef = useRef<string | null>(activeHeadingId);
@@ -31,13 +34,19 @@ export function useScrollSpy(
 
   // recompute heading tops
   const recomputeHeadingTops = useCallback(() => {
+    const view = cmViewRef?.current;
+    if (view && outline.length) {
+      const arr = measureHeadingTopsBatchCM(view, outline);
+      const buf = new Float32Array(arr.length); for (let i=0;i<arr.length;i++) buf[i]=arr[i];
+      headingTopsRef.current = buf; return;
+    }
     const el = textareaRef.current;
     if (!el || !outline.length) { headingTopsRef.current = null; return; }
     const arr = measureHeadingTopsBatch(el, outline);
     const buf = new Float32Array(arr.length);
     for (let i = 0; i < arr.length; i++) buf[i] = arr[i];
     headingTopsRef.current = buf;
-  }, [outline, textareaRef]);
+  }, [outline, textareaRef, cmViewRef]);
 
   // schedule recompute (idle-ish)
   const scheduleRecomputeHeadingTops = useCallback(() => {
@@ -82,16 +91,16 @@ export function useScrollSpy(
   useEffect(() => {
     const tick = () => {
       const now = Date.now();
-      const el = textareaRef.current;
-      if (el && outline.length && headingTopsRef.current && now >= suppressUntil.current) {
+      const scrollEl = cmViewRef?.current?.scrollDOM ?? textareaRef.current;
+      if (scrollEl && outline.length && headingTopsRef.current && now >= suppressUntil.current) {
         if (!(lockRef.current.id && now < lockRef.current.until) && now - lastProgRef.current >= 900) {
-          const st = el.scrollTop;
+          const st = scrollEl.scrollTop;
           if (st !== lastScrollTop.current) {
             lastScrollTop.current = st;
 
             const tops = headingTopsRef.current!;
             // anchor Y = bias position
-            const anchorY = st + bias * el.clientHeight;
+            const anchorY = st + bias * scrollEl.clientHeight;
 
             // hysteresis via midpoints
             let lo = 0, hi = tops.length - 2, cut = tops.length - 1;
@@ -112,7 +121,7 @@ export function useScrollSpy(
     };
     rafId.current = requestAnimationFrame(tick);
     return () => { if (rafId.current) cancelAnimationFrame(rafId.current); };
-  }, [bias, outline, textareaRef]);
+  }, [bias, outline, textareaRef, cmViewRef]);
 
   // recompute when outline/markdown changes
   useEffect(() => { recomputeHeadingTops(); }, [recomputeHeadingTops]);
