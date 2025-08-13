@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { EditorState, EditorSelection, Compartment } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
@@ -17,8 +17,8 @@ type Props = {
   onReady?: (view: EditorView) => void;
   /** Called whenever CM recomputes the outline from the current doc */
   onOutlineChange: (outline: Heading[]) => void;
-  /** Called when CM detects the active heading (via caret/selection) */
-  onActiveHeadingChange: (id: string | null, source: 'caret') => void;
+  /** Called when CM detects the active heading (via caret/selection or scroll) */
+  onActiveHeadingChange: (id: string | null, source?: "caret" | "scroll") => void;
   /** Exposes scroll-spy suppression for clean navigation */
   onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
 };
@@ -75,13 +75,11 @@ function computeOutlineFromDoc(doc: string): Heading[] {
       const id = `${slugify(raw) || "heading"}@${offset}`;
       out.push({ id, level, text: raw, offset });
     }
-    // Advance offset past this line + newline
-    offset += line.length + 1;
+    offset += line.length + 1; // + newline
   }
   return out;
 }
 
-// Helper: adjust subsequent heading offsets by a delta using ChangeDesc.mapPos
 function updateOutlineIncremental(
   prev: Heading[],
   changes: import("@codemirror/state").ChangeDesc
@@ -91,7 +89,7 @@ function updateOutlineIncremental(
   const next = new Array<Heading>(prev.length);
   for (let i = 0; i < prev.length; i++) {
     const h = prev[i];
-    const mapped = changes.mapPos(h.offset, 1); // assoc forward
+    const mapped = changes.mapPos(h.offset, 1);
     if (mapped !== h.offset) changed = true;
     next[i] = mapped === h.offset ? h : { ...h, offset: mapped };
   }
@@ -100,7 +98,6 @@ function updateOutlineIncremental(
 
 function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextOffset: number } | null {
   if (!outline.length) return null;
-  // Find last heading with offset <= pos
   let idx = -1;
   for (let i = 0; i < outline.length; i++) {
     if (outline[i].offset <= pos) idx = i; else break;
@@ -117,19 +114,27 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
-  
+
   // Toggleable compartments
   const activeLineComp = useRef(new Compartment()).current;
   const themeComp = useRef(new Compartment()).current;
 
+  // callback refs
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
   const onReadyRef = useRef(onReady);
   const onActiveHeadingChangeRef = useRef(onActiveHeadingChange);
   const onOutlineChangeRef = useRef(onOutlineChange);
   const onScrollSpyReadyRef = useRef(onScrollSpyReady);
+
+  // data refs
   const outlineRef = useRef<Heading[]>([]);
   const suppressUntilRef = useRef(0);
+  const lastActiveIdRef = useRef<string | null>(null);
+
+  // rAF scroll loop refs
+  const scrollRafRef = useRef<number | null>(null);
+  const lastScrollTsRef = useRef(0);
 
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
@@ -137,14 +142,39 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { onActiveHeadingChangeRef.current = onActiveHeadingChange; }, [onActiveHeadingChange]);
   useEffect(() => { onOutlineChangeRef.current = onOutlineChange; }, [onOutlineChange]);
   useEffect(() => { onScrollSpyReadyRef.current = onScrollSpyReady; }, [onScrollSpyReady]);
-  useEffect(() => { outlineRef.current = computeOutlineFromDoc(markdown); onOutlineChangeRef.current(outlineRef.current); }, [markdown]);
+  useEffect(() => {
+    outlineRef.current = computeOutlineFromDoc(markdown);
+    onOutlineChangeRef.current(outlineRef.current);
+  }, [markdown]);
 
   const { htmlToMarkdown } = usePasteToMarkdown();
   const htmlToMdRef = useRef(htmlToMarkdown);
   useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
-  useEffect(() => {
+  // --- viewport-based active heading ---------------------------------------
+  function updateActiveFromViewport(view: EditorView) {
+    // ignore while programmatic scroll is running
+    if (performance.now() <= suppressUntilRef.current) return;
 
+    const sc = view.scrollDOM;
+    const rect = sc.getBoundingClientRect();
+    if (rect.height <= 0) return;
+
+    // Biased anchor (~top third) to keep the section you're reading "sticky"
+    const anchorY = rect.top + rect.height * 0.34;
+    const anchorX = Math.min(rect.right - 8, rect.left + 40);
+    const at = view.posAtCoords({ x: anchorX, y: anchorY });
+    if (!at) return;
+
+    const match = findHeadingForPos(outlineRef.current, at);
+    const nextId = match?.h.id ?? null;
+    if (nextId !== lastActiveIdRef.current) {
+      lastActiveIdRef.current = nextId;
+      onActiveHeadingChangeRef.current(nextId, "scroll");
+    }
+  }
+
+  useEffect(() => {
     const state = EditorState.create({
       doc: markdown,
       extensions: [
@@ -163,20 +193,15 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             fontSize: "14px",
             lineHeight: "1.8"
           },
-          /* Subtly thicker caret; feels "alive" without being chunky */
           ".cm-cursor": {
             borderLeftWidth: "2px",
             borderLeftColor: "#374151"
           }
         }),
-        // Cursor + (optional) highlight colors live here
         themeComp.of(EditorView.theme({
-          // Thicker caret for "breathing" feel (subtle)
           ".cm-cursor": { borderLeftWidth: "2px", borderLeftColor: "#374151" },
-          // When highlight is OFF we forcibly keep the band invisible.
           ".cm-activeLine": { backgroundColor: highlightOn ? "rgba(55,65,81,0.14)" : "transparent" },
           ".cm-activeLineGutter": { backgroundColor: highlightOn ? "rgba(55,65,81,0.10)" : "transparent" },
-          // Slightly darker selection when ON; default browser selection when OFF
           ...(highlightOn ? {
             "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
               backgroundColor: "rgba(55,65,81,0.24) !important"
@@ -190,22 +215,17 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
 
           // Recompute outline on doc changes (single source of truth)
           if (u.docChanged && u.transactions.some(t => t.isUserEvent("input") || t.isUserEvent("delete"))) {
-            // 1) Map existing offsets through the change set (fast path)
             let next = updateOutlineIncremental(outlineRef.current, u.changes);
-            // 2) If headings were added/removed near the changes, do a targeted recompute
-            //    Minimal scan: only re-scan touched lines instead of the whole doc
             let touchedFrom = u.state.doc.length;
             let touchedTo = 0;
-            u.changes.iterChanges((fFrom, fTo, tFrom, tTo) => {
+            u.changes.iterChanges((_, __, tFrom, tTo) => {
               touchedFrom = Math.min(touchedFrom, tFrom);
               touchedTo = Math.max(touchedTo, tTo);
             });
             const slice = u.state.doc.slice(Math.max(0, touchedFrom - 2000), Math.min(u.state.doc.length, touchedTo + 2000)).toString();
             if (/#\s+/.test(slice)) {
-              // fallback local recompute around the touched region if headings likely changed
               next = computeOutlineFromDoc(u.state.doc.toString());
             }
-            // Shallow compare (length + last id/offset) to avoid noisy updates
             const prev = outlineRef.current;
             const changed =
               prev.length !== next.length ||
@@ -218,7 +238,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             }
           }
 
-          // CARET-wins: derive active heading from caret against CM's current outline  
+          // CARET-wins: derive active heading from caret when caret is on a heading line
           if ((u.selectionSet || u.docChanged) && performance.now() > suppressUntilRef.current) {
             const pos = u.state.selection.main.head;
             const match = findHeadingForPos(outlineRef.current, pos);
@@ -227,11 +247,18 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
               const caretLine = u.state.doc.lineAt(pos);
               const caretOnHeadingLine = caretLine.from === lineAtHeading.from;
               if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
+                lastActiveIdRef.current = match.h.id;
                 onActiveHeadingChangeRef.current(match.h.id, "caret");
               }
             } else {
+              lastActiveIdRef.current = null;
               onActiveHeadingChangeRef.current(null, "caret");
             }
+          }
+
+          // Viewport-based sync (CM6-visible-range changed due to scroll/resize)
+          if (u.viewportChanged && performance.now() > suppressUntilRef.current) {
+            updateActiveFromViewport(u.view);
           }
         }),
         EditorView.domEventHandlers({
@@ -239,8 +266,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             const cb = (event as ClipboardEvent).clipboardData;
             if (!cb) return false;
             const html = cb.getData("text/html");
-            if (!html) return false; // plain text → let CM handle it
-
+            if (!html) return false;
             event.preventDefault();
             const md = htmlToMdRef.current(html);
             const sel = view.state.selection.main;
@@ -259,14 +285,39 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     const view = new EditorView({ state, parent });
     viewRef.current = view;
     onReadyRef.current?.(view);
-    
-    // Expose suppress function for navigation coordination
+
+    // expose suppression for navigation clicks
     const suppress = (ms: number = 900) => {
       suppressUntilRef.current = performance.now() + ms;
     };
     onScrollSpyReadyRef.current?.(suppress);
 
-    return () => { view.destroy(); viewRef.current = null; };
+    // Safety net: rAF loop while the user is actively scrolling
+    const IDLE_MS = 120;
+    const onScroll = () => {
+      lastScrollTsRef.current = performance.now();
+      if (scrollRafRef.current == null) {
+        const tick = () => {
+          if (performance.now() > suppressUntilRef.current) {
+            updateActiveFromViewport(view);
+          }
+          if (performance.now() - lastScrollTsRef.current < IDLE_MS) {
+            scrollRafRef.current = requestAnimationFrame(tick);
+          } else {
+            scrollRafRef.current = null;
+          }
+        };
+        scrollRafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    view.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      view.scrollDOM.removeEventListener("scroll", onScroll);
+      if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current);
+      view.destroy();
+      viewRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // init once
 
@@ -276,7 +327,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     if (!view) return;
     view.dispatch({
       effects: [
-        activeLineComp.reconfigure(highlightOn ? highlightActiveLine() : []),
+        activeLineComp.reconfigure(highlightActiveLine()),
         themeComp.reconfigure(EditorView.theme({
           ".cm-cursor": { borderLeftWidth: "2px", borderLeftColor: "#374151" },
           ".cm-activeLine": { backgroundColor: highlightOn ? "rgba(55,65,81,0.14)" : "transparent" },
