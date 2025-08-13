@@ -3,7 +3,7 @@ import { ViewPlugin, ViewUpdate, EditorView } from "@codemirror/view";
 import type { Heading } from "./hooks/useOutline";
 
 type GetOutline = () => Heading[]; // always returns latest outline (from React state)
-type OnActive = (id: string | null) => void;
+type OnActive = (id: string | null, source: 'scrollspy') => void;
 
 export function scrollSpyPlugin(
   getOutline: GetOutline,
@@ -81,7 +81,7 @@ export function scrollSpyPlugin(
       this.lastAnchorPos = pos;
 
       const outline = getOutline();
-      if (!outline.length) { onActive(null); return; }
+      if (!outline.length) { onActive(null, 'scrollspy'); return; }
 
       // Binary search last heading with offset <= pos
       let lo = 0, hi = outline.length - 1, ans = -1;
@@ -107,7 +107,7 @@ export function scrollSpyPlugin(
           this.lastSwitchAt = now;
           this.lastActiveId = nextId;
         }
-        onActive(nextId);
+        onActive(nextId, 'scrollspy');
       } else {
         // keep lastId up to date when we're stable
         this.lastActiveId = cur;

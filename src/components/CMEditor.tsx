@@ -15,7 +15,7 @@ type Props = {
   toggleNarrow: () => void;
   onReady?: (view: EditorView) => void;
   getOutline: () => Heading[];
-  onActiveHeadingChange: (id: string | null) => void;
+  onActiveHeadingChange: (id: string | null, source: 'scrollspy' | 'caret') => void;
   onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
 };
 
@@ -88,7 +88,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     // Prefer a lower anchor so spy naturally favors the current section
     const scrollSpy = scrollSpyPlugin(
       () => getOutlineRef.current(),
-      (id) => onActiveHeadingChangeRef.current(id),
+      (id, source) => onActiveHeadingChangeRef.current(id, source),
       "third"
     );
 
@@ -127,7 +127,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
               const caretOnHeadingLine = caretLine.from === lineAtHeading.from; // caret is on the heading line itself
               // Also ensure caret is still within this heading's section range
               if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
-                onActiveHeadingChangeRef.current(match.h.id);
+                onActiveHeadingChangeRef.current(match.h.id, 'caret');
               }
             }
           }

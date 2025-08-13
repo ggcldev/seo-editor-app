@@ -66,6 +66,10 @@ Final deep content.`);
 
   // Exposed by CM scroll‑spy
   const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
+  
+  // Centralized heading change coordination
+  const isUserScrollingRef = useRef(false);
+  const programmaticScrollRef = useRef(false);
 
   const onStartResize = useCallback(() => {
     setIsResizing(true);
@@ -97,6 +101,23 @@ Final deep content.`);
   }
 
   /**
+   * Centralized heading change handler - prevents race conditions
+   */
+  const handleActiveHeadingChange = useCallback((id: string | null, source: 'scrollspy' | 'caret' | 'click') => {
+    // During programmatic scroll, only allow click source
+    if (programmaticScrollRef.current && source !== 'click') {
+      return;
+    }
+    
+    // During user scroll, prioritize scrollspy
+    if (isUserScrollingRef.current && source === 'caret') {
+      return;
+    }
+    
+    setActiveHeadingId(id);
+  }, []);
+
+  /**
    * Jump to a heading. Uses the FRESHEST outline (not deferred) and,
    * when provided, resolves by (id, expectedOffset) to avoid duplicates.
    */
@@ -114,8 +135,12 @@ Final deep content.`);
     if (!h) h = deferredOutline.find(o => o.id === id);
     if (!h) return;
 
-    // Keep spy quiet during programmatic scroll (and release early once settled)
-    suppressScrollSpyRef.current?.(1400);
+    // Mark as programmatic scroll and suppress spy
+    programmaticScrollRef.current = true;
+    suppressScrollSpyRef.current?.(2000); // Longer suppression
+    
+    // Immediately set the target heading (prevents race)
+    handleActiveHeadingChange(h.id, 'click');
 
     const pos = caretAtHeadingEnd(markdown, h);
     cmRef.current?.setSelectionAt(pos);
@@ -124,14 +149,19 @@ Final deep content.`);
     if (view) {
       smoothScrollTo(view, pos, 24, 0.34);
 
-      // Early suppression termination when scrolling stabilizes
+      // Enhanced stability detection
       const sc = view.scrollDOM;
       let last = sc.scrollTop;
       let still = 0;
       const tick = () => {
         const now = sc.scrollTop;
-        if (Math.abs(now - last) < 0.5) {
-          if (++still >= 4) { suppressScrollSpyRef.current?.(0); return; }
+        if (Math.abs(now - last) < 0.3) {
+          if (++still >= 6) { 
+            // End programmatic scroll mode
+            programmaticScrollRef.current = false;
+            suppressScrollSpyRef.current?.(0); 
+            return; 
+          }
         } else {
           still = 0; last = now;
         }
@@ -139,12 +169,40 @@ Final deep content.`);
       };
       requestAnimationFrame(tick);
     }
-
-    setActiveHeadingId(h.id); // optimistic; spy confirms next frame
-  }, [outline, deferredOutline, markdown]);
+  }, [outline, deferredOutline, markdown, handleActiveHeadingChange]);
 
   // Cleanup
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
+
+  // User scroll detection
+  useEffect(() => {
+    const view = cmRef.current?.getView();
+    if (!view) return;
+    
+    const scrollDOM = view.scrollDOM;
+    let scrollTimeout: NodeJS.Timeout | null = null;
+    
+    const onUserScroll = () => {
+      if (!programmaticScrollRef.current) {
+        isUserScrollingRef.current = true;
+        if (scrollTimeout) clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          isUserScrollingRef.current = false;
+        }, 150);
+      }
+    };
+    
+    scrollDOM.addEventListener('scroll', onUserScroll, { passive: true });
+    scrollDOM.addEventListener('wheel', onUserScroll, { passive: true });
+    scrollDOM.addEventListener('touchmove', onUserScroll, { passive: true });
+    
+    return () => {
+      scrollDOM.removeEventListener('scroll', onUserScroll);
+      scrollDOM.removeEventListener('wheel', onUserScroll);
+      scrollDOM.removeEventListener('touchmove', onUserScroll);
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
+  }, []);
 
   // Mouse + touch resize (kept from your earlier version)
   useEffect(() => {
@@ -216,7 +274,7 @@ Final deep content.`);
           toggleNarrow={toggleNarrow}
           onReady={setCmView}
           getOutline={() => deferredOutline}
-          onActiveHeadingChange={setActiveHeadingId}
+          onActiveHeadingChange={(id, source) => handleActiveHeadingChange(id, source)}
           onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
         />
       </div>
