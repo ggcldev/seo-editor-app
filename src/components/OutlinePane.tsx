@@ -157,9 +157,17 @@ export const OutlinePane = React.memo(function OutlinePane({
     const opts = { passive: true } as AddEventListenerOptions;
     el.addEventListener('wheel', markUserScroll, opts);
     el.addEventListener('touchstart', markUserScroll, opts);
+    el.addEventListener('scroll', markUserScroll, opts);
+    const onKey = (e: KeyboardEvent) => {
+      // common navigation keys inside the outline
+      if (['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '].includes(e.key)) markUserScroll();
+    };
+    el.addEventListener('keydown', onKey);
     return () => {
       el.removeEventListener('wheel', markUserScroll, opts);
       el.removeEventListener('touchstart', markUserScroll, opts);
+      el.removeEventListener('scroll', markUserScroll, opts);
+      el.removeEventListener('keydown', onKey);
     };
   }, [markUserScroll]);
 

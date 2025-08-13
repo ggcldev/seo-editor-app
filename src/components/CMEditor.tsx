@@ -129,6 +129,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
 
   // data refs
   const outlineRef = useRef<Heading[]>([]);
+  const prevDocRef = useRef<string>(markdown);
   const suppressUntilRef = useRef(0);
   const lastActiveIdRef = useRef<string | null>(null);
 
@@ -214,7 +215,11 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
 
           // Recompute outline on doc changes (single source of truth)
-          if (u.docChanged && u.transactions.some(t => t.isUserEvent("input") || t.isUserEvent("delete"))) {
+          if (u.docChanged) {
+            const nextDoc = u.state.doc.toString();
+            const prevDoc = prevDocRef.current;
+            prevDocRef.current = nextDoc;
+
             let next = updateOutlineIncremental(outlineRef.current, u.changes);
             let touchedFrom = u.state.doc.length;
             let touchedTo = 0;
@@ -222,9 +227,18 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
               touchedFrom = Math.min(touchedFrom, tFrom);
               touchedTo = Math.max(touchedTo, tTo);
             });
-            const slice = u.state.doc.slice(Math.max(0, touchedFrom - 2000), Math.min(u.state.doc.length, touchedTo + 2000)).toString();
-            if (/#\s+/.test(slice)) {
-              next = computeOutlineFromDoc(u.state.doc.toString());
+            // If any touched line was or is a heading, reparse fully
+            const prevLines = prevDoc.slice(
+              Math.max(0, prevDoc.lastIndexOf("\n", touchedFrom) + 1),
+              Math.min(prevDoc.length, prevDoc.indexOf("\n", touchedTo) === -1 ? prevDoc.length : prevDoc.indexOf("\n", touchedTo))
+            );
+            const nextLines = nextDoc.slice(
+              Math.max(0, nextDoc.lastIndexOf("\n", touchedFrom) + 1),
+              Math.min(nextDoc.length, nextDoc.indexOf("\n", touchedTo) === -1 ? nextDoc.length : nextDoc.indexOf("\n", touchedTo))
+            );
+            const headingLine = /(^|\n)\s*#{1,6}\s/;
+            if (headingLine.test(prevLines) || headingLine.test(nextLines)) {
+              next = computeOutlineFromDoc(nextDoc);
             }
             const prev = outlineRef.current;
             const changed =

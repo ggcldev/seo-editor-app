@@ -5,8 +5,8 @@ import { CMEditor, type CMHandle } from './components/CMEditor';
 import { EditorView } from '@codemirror/view';
 import { EditorSelection } from '@codemirror/state';
 import { MetricsBar } from './components/MetricsBar';
-import { normalizeEOL } from './utils/eol';
-import './styles/globals.css';
+import { normalizeEOL } from './eol';
+import './globals.css';
 
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,

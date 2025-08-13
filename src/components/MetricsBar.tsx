@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useCallback } from 'react';
-import { calculateMetricsThrottled, getLastMetrics, cancelMetricsThrottle, type TextMetrics } from '../utils/metrics';
+import { calculateMetricsThrottled, getLastMetrics, cancelMetricsThrottle, type TextMetrics } from '../metrics';
 
 interface MetricsBarProps {
   markdown: string;
@@ -46,7 +46,8 @@ export const MetricsBar = memo(function MetricsBar({ markdown }: MetricsBarProps
         justifyContent: 'flex-end',
         alignItems: 'center',
         gap: '24px',
-        contain: 'paint size'
+        contain: 'paint size',
+        pointerEvents: 'none'
       }}
     >
       <span>Words: {formatNumber(metrics.words)}</span>
