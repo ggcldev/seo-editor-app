@@ -13,7 +13,7 @@ const OUTLINE_STYLES = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 28, height: 28,                // bigger hit target
+    width: 28, height: 28,
     border: 'none',
     background: 'transparent',
     cursor: 'pointer',
@@ -26,22 +26,19 @@ type OutlinePaneProps = {
   outline: Heading[];
   activeHeadingId: string | null;
   onStartResize: () => void;
-  onSelectHeading: (id: string) => void;
-  // NEW: for keyboard resizing
+  onSelectHeading: (id: string, expectedOffset?: number) => void;
   onBumpWidth: (delta: number) => void;
 };
 
-/** Does heading i have children? */
 function hasChildren(outline: Heading[], i: number): boolean {
   const me = outline[i], next = outline[i + 1];
   return !!next && next.level > me.level;
 }
 
-/** Filter by collapsed ancestors */
 function computeVisible(outline: Heading[], collapsed: Set<string>): Heading[] {
   if (!outline.length || !collapsed.size) return outline;
   const visible: Heading[] = [];
-  const stack: number[] = []; // levels of collapsed ancestors
+  const stack: number[] = [];
   for (let i = 0; i < outline.length; i++) {
     const h = outline[i];
     while (stack.length && h.level <= stack[stack.length - 1]) stack.pop();
@@ -52,7 +49,6 @@ function computeVisible(outline: Heading[], collapsed: Set<string>): Heading[] {
   return visible;
 }
 
-/** Is active heading visible given current collapsed set? */
 function isActiveVisible(outline: Heading[], activeId: string | null, collapsed: Set<string>): boolean {
   if (!activeId || !collapsed.size) return true;
   const idx = outline.findIndex(h => h.id === activeId);
@@ -61,15 +57,14 @@ function isActiveVisible(outline: Heading[], activeId: string | null, collapsed:
   for (let i = idx - 1; i >= 0; i--) {
     const anc = outline[i];
     if (anc.level < level) {
-      if (collapsed.has(anc.id)) return false; // hidden by collapsed ancestor
-      level = anc.level; // move up the tree
+      if (collapsed.has(anc.id)) return false;
+      level = anc.level;
       if (level === 1) break;
     }
   }
   return true;
 }
 
-/** Nearest collapsed ancestor id (for highlight fallback) */
 function nearestCollapsedAncestorId(outline: Heading[], activeId: string, collapsed: Set<string>): string | null {
   const idx = outline.findIndex(h => h.id === activeId);
   if (idx < 0) return null;
@@ -94,7 +89,7 @@ const Row = React.memo(function Row({
   const label = isFolded ? 'Expand section' : 'Collapse section';
   return (
     <div
-      onClick={onClick}
+      onClick={(e) => { e.preventDefault(); onClick(); }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
         if (e.key === 'ArrowLeft' && canFold && !isFolded) { e.preventDefault(); onToggle(); }
@@ -106,6 +101,7 @@ const Row = React.memo(function Row({
       tabIndex={0}
       aria-current={isActive ? 'true' : undefined}
       style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+      title={h.text}
     >
       {canFold ? (
         <button
@@ -116,13 +112,12 @@ const Row = React.memo(function Row({
           style={OUTLINE_STYLES.foldBtn}
           title={label}
         >
-          {/* Larger chevron (16x16), rotates when folded */}
           <svg width="16" height="16" viewBox="0 0 24 24" style={{ transform: isFolded ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.12s ease' }} aria-hidden="true">
             <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
       ) : (
-        <span style={{ width: 28 }} /> // spacer
+        <span style={{ width: 28 }} />
       )}
       <OutlineItem item={h} isActive={isActive} />
     </div>
@@ -136,18 +131,6 @@ export const OutlinePane = React.memo(function OutlinePane({
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // Prune stale collapsed ids when outline changes
-  useEffect(() => {
-    if (collapsed.size === 0) return;
-    const ids = new Set(outline.map(h => h.id));
-    setCollapsed(prev => {
-      let changed = false;
-      const next = new Set<string>();
-      prev.forEach(id => { if (ids.has(id)) next.add(id); else changed = true; });
-      return changed ? next : prev;
-    });
-  }, [outline]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Which headings have children?
   const hasChild = useMemo(() => {
     const m = new Map<string, boolean>();
@@ -157,15 +140,13 @@ export const OutlinePane = React.memo(function OutlinePane({
 
   const visible = useMemo(() => computeVisible(outline, collapsed), [outline, collapsed]);
 
-  // 👇 Compute a local highlight that respects folding (no editor scroll)
   const displayActiveId = useMemo(() => {
     if (!activeHeadingId) return null;
     if (isActiveVisible(outline, activeHeadingId, collapsed)) return activeHeadingId;
     return nearestCollapsedAncestorId(outline, activeHeadingId, collapsed) ?? activeHeadingId;
   }, [outline, activeHeadingId, collapsed]);
 
-  // Auto-scroll the *displayed* active row into view (no tug-of-war)
-  // Also suppress if the user is actively scrolling the outline.
+  // Polite auto-scroll to the active row
   const userScrollUntil = useRef(0);
   const markUserScroll = useCallback(() => { userScrollUntil.current = Date.now() + 300; }, []);
   const isUserScrolling = () => Date.now() < userScrollUntil.current;
@@ -236,20 +217,13 @@ export const OutlinePane = React.memo(function OutlinePane({
         <div style={OUTLINE_STYLES.titleRow}>
           <div style={OUTLINE_STYLES.title}>Outline</div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              type="button"
-              className="outline-muted-btn"
-              onClick={() => setCollapsed(new Set())}
-              title="Expand all"
-            >
+            <button type="button" className="outline-muted-btn" onClick={() => setCollapsed(new Set())} title="Expand all">
               Expand all
             </button>
             <button
               type="button"
               className="outline-muted-btn"
-              onClick={() =>
-                setCollapsed(new Set(outline.filter((_, i) => hasChildren(outline, i)).map(h => h.id)))
-              }
+              onClick={() => setCollapsed(new Set(outline.filter((_, i) => hasChildren(outline, i)).map(h => h.id)))}
               title="Collapse all"
             >
               Collapse all
@@ -263,14 +237,15 @@ export const OutlinePane = React.memo(function OutlinePane({
             const canFold = !!hasChild.get(h.id);
             const isFolded = collapsed.has(h.id);
             return (
-              <div key={h.id} ref={isActive ? activeItemRef : null}>
+              <div key={`${h.id}@${h.offset}`} ref={isActive ? activeItemRef : null}>
                 <Row
                   h={h}
                   isActive={isActive}
                   canFold={canFold}
                   isFolded={isFolded}
                   onToggle={() => toggleFold(h.id)}
-                  onClick={() => onSelectHeading(h.id)}
+                  // Pass both id and offset so App resolves precisely AND uses the fresh outline
+                  onClick={() => onSelectHeading(h.id, h.offset)}
                 />
               </div>
             );

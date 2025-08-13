@@ -7,7 +7,6 @@ import { MetricsBar } from './components/MetricsBar';
 import { normalizeEOL } from './utils/eol';
 import './styles/globals.css';
 
-
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,
   MIN_WIDTH: 160,
@@ -31,14 +30,6 @@ Even more content.
 
 Final content.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
-
-Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
-
 # Another Section
 
 More content to make it scrollable...
@@ -56,70 +47,74 @@ Final deep content.`);
       return nv === prev ? prev : nv;
     });
   }, []);
+
   const [narrow, setNarrow] = useState(false);
   const [outlineWidth, setOutlineWidth] = useState(OUTLINE_CONFIG.DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
+
   const shellRef = useRef<HTMLDivElement>(null);
   const cmRef = useRef<CMHandle>(null);
   const [, setCmView] = useState<EditorView | null>(null);
   const resizeRaf = useRef<number | null>(null);
 
+  // IMPORTANT: compute fresh outline; only use deferred one for rendering
   const outline = useOutline(markdown);
-  const deferredOutline = useDeferredValue(outline); // <- render later if typing
+  const deferredOutline = useDeferredValue(outline);
 
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const getOutline = useCallback(() => deferredOutline, [deferredOutline]);
 
-  // scroll-spy suppression
+  // Exposed by CM scroll‑spy
   const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
 
-  // ---- resize handlers ------------------------------------------------------
   const onStartResize = useCallback(() => {
     setIsResizing(true);
     document.body.classList.add('noselect');
   }, []);
 
-  const onBumpWidth = useCallback((delta: number) => {
-    setOutlineWidth(prev => {
-      const next = Math.min(Math.max(prev + delta, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH);
-      return next;
-    });
-  }, []);
-
-  // ---- helpers --------------------------------------------------------------
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
 
+  // Caret just after visible heading text
   function caretAtHeadingEnd(md: string, h: { offset: number }) {
     const nl = md.indexOf('\n', h.offset);
     const lineEnd = nl === -1 ? md.length : nl;
-    const line = md.slice(h.offset, lineEnd);
-    const trimmed = line.replace(/\s*#+\s*$/, '').replace(/\s+$/, '');
-    return h.offset + trimmed.length;
+    const trimmedLine = md
+      .slice(h.offset, lineEnd)
+      .replace(/\s*#+\s*$/, '')
+      .replace(/\s+$/, '');
+    return Math.min(md.length, h.offset + trimmedLine.length);
   }
 
-  function smoothScrollToCenter(view: EditorView, pos: number, margin = 24, bias = 0.5) {
+  // Smooth scroll to pos with a slightly lower bias (keeps current heading dominant)
+  function smoothScrollTo(view: EditorView, pos: number, margin = 24, bias = 0.34) {
     const rect = view.coordsAtPos(pos);
     if (!rect) return;
     const sc = view.scrollDOM;
     const scRect = sc.getBoundingClientRect();
     const anchorDelta = sc.clientHeight * bias;
-    const targetTop =
-      (rect.top - scRect.top) + sc.scrollTop - anchorDelta - margin;
+    const targetTop = (rect.top - scRect.top) + sc.scrollTop - anchorDelta - margin;
     sc.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }
 
-  // ⬇️ MAIN FIX: resolve by (id, offset) so duplicates don't jump to the first instance
+  /**
+   * Jump to a heading. Uses the FRESHEST outline (not deferred) and,
+   * when provided, resolves by (id, expectedOffset) to avoid duplicates.
+   */
   const onSelectHeading = useCallback((id: string, expectedOffset?: number) => {
-    // Prefer exact (id, offset) if provided
+    // 1) Resolve in fresh outline first
     let h = expectedOffset != null
-      ? deferredOutline.find(o => o.id === id && o.offset === expectedOffset)
+      ? outline.find(o => o.id === id && o.offset === expectedOffset)
       : undefined;
+    if (!h) h = outline.find(o => o.id === id);
 
-    // Fallback: first matching id
+    // 2) Fallback to deferred if needed (very rare)
+    if (!h && expectedOffset != null) {
+      h = deferredOutline.find(o => o.id === id && o.offset === expectedOffset);
+    }
     if (!h) h = deferredOutline.find(o => o.id === id);
     if (!h) return;
 
-    // Suppress scroll-spy longer than the typical smooth scroll to avoid fights
+    // Keep spy quiet during programmatic scroll (and release early once settled)
     suppressScrollSpyRef.current?.(1400);
 
     const pos = caretAtHeadingEnd(markdown, h);
@@ -127,42 +122,31 @@ Final deep content.`);
 
     const view = cmRef.current?.getView();
     if (view) {
-      // scroll to a point inside the heading (caret position), with a slightly lower bias
-      smoothScrollToCenter(view, pos, 24, 0.34);
+      smoothScrollTo(view, pos, 24, 0.34);
 
-      // Micro-nudge after smooth scroll to reaffirm cursor position and active heading
-      requestAnimationFrame(() => {
-        // nudge the selection 0 chars (reaffirm) – harmless but keeps CM's notion aligned
-        cmRef.current?.setSelectionAt(pos);
-      });
-
-      // Optional: end suppression early when scrolling settles
+      // Early suppression termination when scrolling stabilizes
       const sc = view.scrollDOM;
       let last = sc.scrollTop;
       let still = 0;
       const tick = () => {
         const now = sc.scrollTop;
-        if (Math.abs(now - last) < 1) {
-          still++;
-          if (still >= 3) return; // ~3 frames stable → we're done
+        if (Math.abs(now - last) < 0.5) {
+          if (++still >= 4) { suppressScrollSpyRef.current?.(0); return; }
         } else {
-          still = 0;
-          last = now;
+          still = 0; last = now;
         }
         requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
     }
 
-    // Optimistic active id; plugin will confirm
-    setActiveHeadingId(h.id);
-  }, [deferredOutline, markdown]);
+    setActiveHeadingId(h.id); // optimistic; spy confirms next frame
+  }, [outline, deferredOutline, markdown]);
 
-
-  // Body class leak guard - ensure 'noselect' is cleaned up on unmount
+  // Cleanup
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
 
-  // Mouse + touch resize with rAF throttling
+  // Mouse + touch resize (kept from your earlier version)
   useEffect(() => {
     if (!isResizing) return;
 
@@ -179,10 +163,7 @@ Final deep content.`);
     };
 
     const onMouseMove = (e: MouseEvent) => move(e.clientX);
-    const onTouchMove = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (t) move(t.clientX);
-    };
+    const onTouchMove = (e: TouchEvent) => move(e.touches[0]?.clientX ?? 0);
 
     const end = () => {
       setIsResizing(false);
@@ -207,20 +188,21 @@ Final deep content.`);
     <div
       ref={shellRef}
       className="editor-shell"
-      style={{ 
-        display: 'grid', 
-        gridTemplateColumns: `${outlineWidth}px 1fr`, 
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `${outlineWidth}px 1fr`,
         gridTemplateRows: '1fr auto',
-        height: '100vh' 
+        height: '100vh'
       }}
     >
       <OutlinePane
-        outline={deferredOutline}
+        outline={deferredOutline}            // render-friendly
         activeHeadingId={activeHeadingId}
         onStartResize={onStartResize}
-        onSelectHeading={onSelectHeading} // now (id, offset)
-        // NEW: keyboard bump (a11y)
-        onBumpWidth={onBumpWidth}
+        onSelectHeading={onSelectHeading}    // (id, expectedOffset?) supported
+        onBumpWidth={(d) => {
+          setOutlineWidth(prev => Math.min(Math.max(prev + d, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
+        }}
       />
 
       <div style={{ position: 'relative' }}>
@@ -233,7 +215,7 @@ Final deep content.`);
           narrow={narrow}
           toggleNarrow={toggleNarrow}
           onReady={setCmView}
-          getOutline={getOutline}
+          getOutline={() => deferredOutline}
           onActiveHeadingChange={setActiveHeadingId}
           onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
         />
