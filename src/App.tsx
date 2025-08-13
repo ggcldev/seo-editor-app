@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useDeferredValue } from 'reac
 import type { Heading } from './hooks/useOutline';
 import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
-import type { EditorView } from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
 import { MetricsBar } from './components/MetricsBar';
 import { normalizeEOL } from './utils/eol';
 import './styles/globals.css';
@@ -98,18 +98,34 @@ Final deep content.`);
     setActiveHeadingId(id);
   }, []);
 
-  /** Jump to a heading by exact offset (no id reconciliation). */
+  /** CM6-native, viewport-aware two-phase jump. */
   const onSelectHeading = useCallback((offset: number) => {
     const h = outline.find(o => o.offset === offset);
     if (!h) return;
-    // Optimistic highlight to keep sidebar snappy
-    handleActiveHeadingChange(h.id);
-    const pos = caretAtHeadingEnd(markdown, h);
-    cmRef.current?.setSelectionAt(pos);
+    handleActiveHeadingChange(h.id); // optimistic highlight
 
+    const pos = caretAtHeadingEnd(markdown, h);
     const view = cmRef.current?.getView();
-    if (view) {
-      smoothScrollTo(view, pos, 24, 0.34);
+    if (!view) return;
+
+    // Put caret at the target first (helps CM compute viewport & coords)
+    view.dispatch({ selection: { anchor: pos } });
+
+    const { from, to } = view.viewport; // CM6 virtualized viewport (by doc offsets)
+    const nearBuffer = 2000;            // treat within ±2k chars as "near" (cheap to tune)
+    const isFar = pos < (from - nearBuffer) || pos > (to + nearBuffer);
+
+    if (isFar) {
+      // Phase 1: instant snap; gets the line realized in the DOM immediately.
+      view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "start" }) });
+
+      // Phase 2: next frame, short smooth nudge to bias placement (e.g., center/third).
+      requestAnimationFrame(() => {
+        view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+      });
+    } else {
+      // Near target: just a short smooth scroll.
+      view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "center" }) });
     }
   }, [outline, markdown, handleActiveHeadingChange]);
 
