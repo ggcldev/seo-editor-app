@@ -11,15 +11,20 @@ export function scrollSpyPlugin(
   bias: "top" | "center" | "third" = "third"
 ) {
   const frac = bias === "top" ? 0 : bias === "center" ? 0.5 : 0.33;
+  
+  let pluginInstance: any = null;
 
-  return ViewPlugin.define((view: EditorView) => {
-    return new class {
+  const plugin = ViewPlugin.define((view: EditorView) => {
+    const instance = new class {
     private view: EditorView = view;
     private frame: number | null = null;
     private resizeObserver: ResizeObserver;
     private lastActiveId: string | null = null;
     private lastSwitchAt = 0;
+    private suppressUntil = 0;
+    private lastAnchorPos: number | null = null;
     private readonly HYSTERESIS_MS = 90;
+    private readonly CALM_BAND_PX = 28;
 
     constructor() {
       // run once immediately so we get an initial active heading on mount
@@ -54,12 +59,26 @@ export function scrollSpyPlugin(
     }
 
     private compute() {
+      const now = performance.now();
+      
+      // Skip if we're in suppression window (programmatic scroll)
+      if (now < this.suppressUntil) {
+        return;
+      }
+
       const sc = this.view.scrollDOM;
       const rect = sc.getBoundingClientRect();
       // Anchor a bit inside the scroller to avoid seam glitches
       const y = rect.top + frac * sc.clientHeight + 8;
       const x = rect.left + 8;
       const pos = this.view.posAtCoords({ x, y }) ?? 0;
+
+      // Calm band: ignore tiny scroll movements
+      if (this.lastAnchorPos !== null &&
+          Math.abs(pos - this.lastAnchorPos) <= this.CALM_BAND_PX) {
+        return; // ignore tiny movements
+      }
+      this.lastAnchorPos = pos;
 
       const outline = getOutline();
       if (!outline.length) { onActive(null); return; }
@@ -75,7 +94,6 @@ export function scrollSpyPlugin(
       
       if (!nextId) return;
       
-      const now = performance.now();
       const cur = this.lastActiveId;
       
       // Only switch if enough time has passed since the last change
@@ -95,6 +113,24 @@ export function scrollSpyPlugin(
         this.lastActiveId = cur;
       }
     }
+
+    // Public method for programmatic scroll suppression
+    suppress(ms: number = 1200) {
+      this.suppressUntil = performance.now() + ms;
+    }
     }();
+    
+    pluginInstance = instance;
+    return instance;
   });
+
+  // Return plugin with suppress method
+  return {
+    plugin,
+    suppress: (ms: number = 1200) => {
+      if (pluginInstance) {
+        pluginInstance.suppress(ms);
+      }
+    }
+  };
 }

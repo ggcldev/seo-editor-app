@@ -70,6 +70,7 @@ Final deep content.`);
   // NEW: active heading controlled purely by CM plugin
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const getOutline = useCallback(() => deferredOutline, [deferredOutline]);
+  const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
 
 
   // Extract callbacks for stable references
@@ -120,6 +121,9 @@ Final deep content.`);
   const onSelectHeading = useCallback((id: string) => {
     const h = deferredOutline.find(o => o.id === id);
     if (!h) return;
+    
+    // Suppress scrollspy during programmatic scroll (1200ms should cover smooth scroll)
+    suppressScrollSpyRef.current?.(1200);
     
     // caret at end of heading line
     const pos = caretAtHeadingEnd(markdown, h);
@@ -198,6 +202,7 @@ Final deep content.`);
           // NEW:
           getOutline={getOutline}
           onActiveHeadingChange={setActiveHeadingId}
+          onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
         />
       </div>
     </div>

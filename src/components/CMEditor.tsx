@@ -18,6 +18,7 @@ type Props = {
   // NEW:
   getOutline: () => Heading[];
   onActiveHeadingChange: (id: string | null) => void;
+  onScrollSpyReady?: (suppress: (ms?: number) => void) => void; // Expose suppress method
 };
 
 export type CMHandle = {
@@ -64,7 +65,7 @@ const STYLES = {
 } as const;
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, getOutline, onActiveHeadingChange },
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, getOutline, onActiveHeadingChange, onScrollSpyReady },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -102,6 +103,12 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
 
   // Initialize CodeMirror ONCE (Strict-Mode safe with proper cleanup)
   useEffect(() => {
+    const scrollSpy = scrollSpyPlugin(
+      () => getOutlineRef.current(),
+      (id) => onActiveHeadingChangeRef.current(id),
+      "center"
+    );
+    
     const state = EditorState.create({
       doc: markdown,
       extensions: [
@@ -146,11 +153,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           }
         }),
         // 🔥 Native CM6 scroll-spy
-        scrollSpyPlugin(
-          () => getOutlineRef.current(),
-          (id) => onActiveHeadingChangeRef.current(id),
-          "center"
-        ),
+        scrollSpy.plugin,
       ]
     });
 
@@ -159,6 +162,11 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     const view = new EditorView({ state, parent });
     viewRef.current = view;
     onReadyRef.current?.(view);
+    
+    // Expose suppress method to parent
+    if (onScrollSpyReady) {
+      onScrollSpyReady(scrollSpy.suppress);
+    }
 
     return () => {
       view.destroy();
