@@ -120,18 +120,27 @@ Final deep content.`);
     if (!rect) return;
 
     const scroller = view.scrollDOM;
-    const scrollerTop = scroller.getBoundingClientRect().top;
-    const targetTop = rect.top - scrollerTop + scroller.scrollTop;
+    const scRect = scroller.getBoundingClientRect();
+    const targetTop = rect.top - scRect.top + scroller.scrollTop; // absolute y of heading in scroller
 
-    // 3. If far away, snap instantly, then smooth adjust
+    // Bias to center (keep ~12px headroom so the cursor isn't exactly on the mid-line)
+    const CENTER_BIAS = 0.5; // 50% of viewport height
+    const MARGIN = 12;
+    let centeredTop = targetTop - (scroller.clientHeight * CENTER_BIAS) + MARGIN;
+
+    // Clamp to valid range
+    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    centeredTop = Math.max(0, Math.min(centeredTop, maxScroll));
+
+    // Long jump? Do a spec-safe snap then smooth settle to the centered target
     const farThreshold = scroller.clientHeight * 3;
-    if (Math.abs(targetTop - scroller.scrollTop) > farThreshold) {
-      scroller.scrollTo({ top: targetTop - 24, behavior: "instant" });
+    if (Math.abs(centeredTop - scroller.scrollTop) > farThreshold) {
+      scroller.scrollTo({ top: centeredTop, behavior: "auto" });   // snap (spec-safe)
       requestAnimationFrame(() => {
-        scroller.scrollTo({ top: targetTop - 24, behavior: "smooth" });
+        scroller.scrollTo({ top: centeredTop, behavior: "smooth" });
       });
     } else {
-      scroller.scrollTo({ top: targetTop - 24, behavior: "smooth" });
+      scroller.scrollTo({ top: centeredTop, behavior: "smooth" });
     }
 
     // 4. Suppress scroll-spy until scrolling is stable
