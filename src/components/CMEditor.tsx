@@ -1,5 +1,5 @@
-import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
-import { EditorState, EditorSelection } from "@codemirror/state";
+import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { EditorState, EditorSelection, Compartment } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
@@ -96,6 +96,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, onOutlineChange, onActiveHeadingChange, onScrollSpyReady },
   ref
 ) {
+  const [highlightEnabled, setHighlightEnabled] = useState(false); // default off
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -121,109 +122,94 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
   useEffect(() => {
+    const extensions = [
+      history(),
+      keymap.of([...defaultKeymap, ...historyKeymap]),
+      mdLang(),
+      EditorView.lineWrapping,
+      highlightEnabled
+        ? highlightActiveLine()
+        : EditorView.theme({
+            ".cm-activeLine": { backgroundColor: "transparent !important" },
+            ".cm-activeLineGutter": { backgroundColor: "transparent !important" }
+          }),
+      EditorView.theme({
+        "&": { height: "100%" },
+        ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" as any },
+        ".cm-content": {
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+          fontSize: "14px",
+          lineHeight: "1.8"
+        }
+      }),
+      ...(highlightEnabled
+        ? [
+            EditorView.theme({
+              ".cm-activeLine": { backgroundColor: "rgba(55, 65, 81, 0.14)" }, // ON default (dark grey)
+              "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+                backgroundColor: "rgba(55, 65, 81, 0.24) !important"
+              },
+              ".cm-cursor": { borderLeftColor: "#374151" }
+            })
+          ]
+        : []),
+      EditorView.updateListener.of((u) => {
+        // Keep upstream state in sync
+        if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+        if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
+
+        // Recompute outline on doc changes (single source of truth)
+        if (u.docChanged) {
+          const next = computeOutlineFromDoc(u.state.doc.toString());
+          // Shallow compare (length + last id/offset) to avoid noisy updates
+          const prev = outlineRef.current;
+          const changed =
+            prev.length !== next.length ||
+            (prev.length && next.length &&
+             (prev[prev.length - 1].offset !== next[next.length - 1].offset ||
+              prev[prev.length - 1].id !== next[next.length - 1].id));
+          if (changed) {
+            outlineRef.current = next;
+            onOutlineChangeRef.current(next);
+          }
+        }
+
+        // CARET-wins: derive active heading from caret against CM's current outline  
+        if ((u.selectionSet || u.docChanged) && performance.now() > suppressUntilRef.current) {
+          const pos = u.state.selection.main.head;
+          const match = findHeadingForPos(outlineRef.current, pos);
+          if (match) {
+            const lineAtHeading = u.state.doc.lineAt(match.h.offset);
+            const caretLine = u.state.doc.lineAt(pos);
+            const caretOnHeadingLine = caretLine.from === lineAtHeading.from;
+            if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
+              onActiveHeadingChangeRef.current(match.h.id, "caret");
+            }
+          } else {
+            onActiveHeadingChangeRef.current(null, "caret");
+          }
+        }
+      }),
+      EditorView.domEventHandlers({
+        paste: (event, view) => {
+          const html = (event as ClipboardEvent).clipboardData?.getData("text/html");
+          if (!html) return false;
+          event.preventDefault();
+          const md = htmlToMdRef.current(html);
+          const sel = view.state.selection.main;
+          view.dispatch({
+            changes: { from: sel.from, to: sel.to, insert: md },
+            selection: EditorSelection.cursor(sel.from + md.length)
+          });
+          return true;
+        }
+      })
+    ];
 
     const state = EditorState.create({
       doc: markdown,
-      extensions: [
-        history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
-        mdLang(),
-        EditorView.lineWrapping,
-        highlightActiveLine(),
-        EditorView.theme({
-          "&": { height: "100%" },
-          ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" as any },
-          ".cm-content": {
-            fontFamily:
-              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-            fontSize: "14px",
-            lineHeight: "1.8"
-          },
-          /* Dark grey active line + selection */
-          ".cm-activeLine": {
-            backgroundColor: "#374151", /* Dark grey highlight */
-            color: "#ffffff" /* White text on dark background */
-          },
-          "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
-            backgroundColor: "rgba(55, 65, 81, 0.24) !important"
-          },
-          ".cm-cursor": {
-            borderLeftColor: "#374151"
-          },
-          /* Transparent scrollbar on right side */
-          ".cm-scroller::-webkit-scrollbar": {
-            width: "8px",
-            backgroundColor: "transparent"
-          },
-          ".cm-scroller::-webkit-scrollbar-track": {
-            backgroundColor: "transparent"
-          },
-          ".cm-scroller::-webkit-scrollbar-thumb": {
-            backgroundColor: "rgba(0, 0, 0, 0.1)",
-            borderRadius: "4px",
-            border: "none"
-          },
-          ".cm-scroller::-webkit-scrollbar-thumb:hover": {
-            backgroundColor: "rgba(0, 0, 0, 0.2)"
-          },
-          /* Firefox */
-          ".cm-scroller": {
-            scrollbarWidth: "thin",
-            scrollbarColor: "rgba(0, 0, 0, 0.1) transparent"
-          }
-        }),
-        EditorView.updateListener.of((u) => {
-          // Keep upstream state in sync
-          if (u.docChanged) onChangeRef.current(u.state.doc.toString());
-          if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
-
-          // Recompute outline on doc changes (single source of truth)
-          if (u.docChanged) {
-            const next = computeOutlineFromDoc(u.state.doc.toString());
-            // Shallow compare (length + last id/offset) to avoid noisy updates
-            const prev = outlineRef.current;
-            const changed =
-              prev.length !== next.length ||
-              (prev.length && next.length &&
-               (prev[prev.length - 1].offset !== next[next.length - 1].offset ||
-                prev[prev.length - 1].id !== next[next.length - 1].id));
-            if (changed) {
-              outlineRef.current = next;
-              onOutlineChangeRef.current(next);
-            }
-          }
-
-          // CARET-wins: derive active heading from caret against CM's current outline  
-          if ((u.selectionSet || u.docChanged) && performance.now() > suppressUntilRef.current) {
-            const pos = u.state.selection.main.head;
-            const match = findHeadingForPos(outlineRef.current, pos);
-            if (match) {
-              const lineAtHeading = u.state.doc.lineAt(match.h.offset);
-              const caretLine = u.state.doc.lineAt(pos);
-              const caretOnHeadingLine = caretLine.from === lineAtHeading.from;
-              if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
-                onActiveHeadingChangeRef.current(match.h.id, "caret");
-              }
-            } else {
-              onActiveHeadingChangeRef.current(null, "caret");
-            }
-          }
-        }),
-        EditorView.domEventHandlers({
-          paste: (event, view) => {
-            const html = (event as ClipboardEvent).clipboardData?.getData("text/html");
-            if (!html) return false;
-            event.preventDefault();
-            const md = htmlToMdRef.current(html);
-            const sel = view.state.selection.main;
-            view.dispatch({
-              changes: { from: sel.from, to: sel.to, insert: md },
-              selection: EditorSelection.cursor(sel.from + md.length)
-            });
-            return true;
-          }
-        })
-      ]
+      extensions
     });
 
     const parent = hostRef.current;
@@ -240,7 +226,23 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
 
     return () => { view.destroy(); viewRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // init once
+  }, [highlightEnabled]); // rebuild when toggled
+
+  // Hotkey: Ctrl/⌘ + Alt + H to toggle
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const handler = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toLowerCase().includes("mac");
+      const cmd = isMac ? e.metaKey : e.ctrlKey;
+      if (cmd && e.altKey && (e.key === "h" || e.key === "H")) {
+        e.preventDefault();
+        setHighlightEnabled(h => !h);
+      }
+    };
+    view.dom.addEventListener("keydown", handler);
+    return () => view.dom.removeEventListener("keydown", handler);
+  }, []);
 
   // Prop → editor sync (preserve full selection range)
   useEffect(() => {
@@ -290,6 +292,16 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             aria-pressed={narrow}
           >
             {narrow ? "Full width" : "Narrow width"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setHighlightEnabled(h => !h)}
+            style={{ ...STYLES.button, right: 120 }}   // sit left of the width toggle
+            aria-label={`Toggle highlight (${highlightEnabled ? "on" : "off"})`}
+            aria-pressed={highlightEnabled}
+            title="Toggle editor highlight (Ctrl/⌘+Alt+H)"
+          >
+            {highlightEnabled ? "Disable Highlight" : "Enable Highlight"}
           </button>
           <div ref={hostRef} style={STYLES.editorHost} />
         </div>
