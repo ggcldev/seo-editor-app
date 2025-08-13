@@ -130,6 +130,12 @@ Final deep content.`);
       // scroll to a point inside the heading (caret position), with a slightly lower bias
       smoothScrollToCenter(view, pos, 24, 0.34);
 
+      // Micro-nudge after smooth scroll to reaffirm cursor position and active heading
+      requestAnimationFrame(() => {
+        // nudge the selection 0 chars (reaffirm) – harmless but keeps CM's notion aligned
+        cmRef.current?.setSelectionAt(pos);
+      });
+
       // Optional: end suppression early when scrolling settles
       const sc = view.scrollDOM;
       let last = sc.scrollTop;
