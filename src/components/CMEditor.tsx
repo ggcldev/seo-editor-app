@@ -4,7 +4,6 @@ import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
 import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
-import { scrollSpyPlugin } from "../cmScrollSpy";
 import type { Heading } from "../hooks/useOutline";
 
 type Props = {
@@ -14,9 +13,10 @@ type Props = {
   narrow: boolean;
   toggleNarrow: () => void;
   onReady?: (view: EditorView) => void;
-  getOutline: () => Heading[];
-  onActiveHeadingChange: (id: string | null, source: 'scrollspy' | 'caret') => void;
-  onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
+  /** Called whenever CM recomputes the outline from the current doc */
+  onOutlineChange: (outline: Heading[]) => void;
+  /** Called when CM detects the active heading (via caret/selection) */
+  onActiveHeadingChange: (id: string | null, source: 'caret') => void;
 };
 
 export type CMHandle = {
@@ -48,6 +48,35 @@ const STYLES = {
 
 // ---- helpers ---------------------------------------------------------------
 
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[#`*_\[\](){}/\\<>:"'.,!?~^$|+-]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function computeOutlineFromDoc(doc: string): Heading[] {
+  const out: Heading[] = [];
+  let offset = 0;
+  const lines = doc.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // ATX style: #..###### Heading [optional trailing #...]
+    const m = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (m) {
+      const level = m[1].length;
+      const raw = m[2].replace(/\s*#+\s*$/, "").trim();
+      const id = `${slugify(raw) || "heading"}@${offset}`;
+      out.push({ id, level, text: raw, offset });
+    }
+    // Advance offset past this line + newline
+    offset += line.length + 1;
+  }
+  return out;
+}
+
 function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextOffset: number } | null {
   if (!outline.length) return null;
   // Find last heading with offset <= pos
@@ -62,7 +91,7 @@ function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextO
 }
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, getOutline, onActiveHeadingChange, onScrollSpyReady },
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, onOutlineChange, onActiveHeadingChange },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -71,26 +100,22 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
   const onReadyRef = useRef(onReady);
-  const getOutlineRef = useRef(getOutline);
   const onActiveHeadingChangeRef = useRef(onActiveHeadingChange);
+  const onOutlineChangeRef = useRef(onOutlineChange);
+  const outlineRef = useRef<Heading[]>([]);
 
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
-  useEffect(() => { getOutlineRef.current = getOutline; }, [getOutline]);
   useEffect(() => { onActiveHeadingChangeRef.current = onActiveHeadingChange; }, [onActiveHeadingChange]);
+  useEffect(() => { onOutlineChangeRef.current = onOutlineChange; }, [onOutlineChange]);
+  useEffect(() => { outlineRef.current = computeOutlineFromDoc(markdown); onOutlineChangeRef.current(outlineRef.current); }, [markdown]);
 
   const { htmlToMarkdown } = usePasteToMarkdown();
   const htmlToMdRef = useRef(htmlToMarkdown);
   useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
   useEffect(() => {
-    // Prefer a lower anchor so spy naturally favors the current section
-    const scrollSpy = scrollSpyPlugin(
-      () => getOutlineRef.current(),
-      (id, source) => onActiveHeadingChangeRef.current(id, source),
-      "third"
-    );
 
     const state = EditorState.create({
       doc: markdown,
@@ -115,20 +140,35 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
 
-          // 👇 CARET-WINS rule: if caret is on a heading line, force that heading active.
-          // This prevents the outline highlight from jumping to the previous header while you edit.
+          // Recompute outline on doc changes (single source of truth)
+          if (u.docChanged) {
+            const next = computeOutlineFromDoc(u.state.doc.toString());
+            // Shallow compare (length + last id/offset) to avoid noisy updates
+            const prev = outlineRef.current;
+            const changed =
+              prev.length !== next.length ||
+              (prev.length && next.length &&
+               (prev[prev.length - 1].offset !== next[next.length - 1].offset ||
+                prev[prev.length - 1].id !== next[next.length - 1].id));
+            if (changed) {
+              outlineRef.current = next;
+              onOutlineChangeRef.current(next);
+            }
+          }
+
+          // CARET-wins: derive active heading from caret against CM's current outline
           if (u.selectionSet || u.docChanged) {
             const pos = u.state.selection.main.head;
-            const outline = getOutlineRef.current();
-            const match = findHeadingForPos(outline, pos);
+            const match = findHeadingForPos(outlineRef.current, pos);
             if (match) {
               const lineAtHeading = u.state.doc.lineAt(match.h.offset);
               const caretLine = u.state.doc.lineAt(pos);
-              const caretOnHeadingLine = caretLine.from === lineAtHeading.from; // caret is on the heading line itself
-              // Also ensure caret is still within this heading's section range
+              const caretOnHeadingLine = caretLine.from === lineAtHeading.from;
               if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
-                onActiveHeadingChangeRef.current(match.h.id, 'caret');
+                onActiveHeadingChangeRef.current(match.h.id, "caret");
               }
+            } else {
+              onActiveHeadingChangeRef.current(null, "caret");
             }
           }
         }),
@@ -145,8 +185,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             });
             return true;
           }
-        }),
-        scrollSpy.plugin,
+        })
       ]
     });
 
@@ -155,7 +194,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     const view = new EditorView({ state, parent });
     viewRef.current = view;
     onReadyRef.current?.(view);
-    onScrollSpyReady?.(scrollSpy.suppress);
 
     return () => { view.destroy(); viewRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

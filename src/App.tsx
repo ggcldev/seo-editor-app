@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useDeferredValue } from 'react';
-import { useOutline } from './hooks/useOutline';
+import type { Heading } from './hooks/useOutline';
 import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
 import type { EditorView } from '@codemirror/view';
@@ -57,19 +57,12 @@ Final deep content.`);
   const [, setCmView] = useState<EditorView | null>(null);
   const resizeRaf = useRef<number | null>(null);
 
-  // IMPORTANT: compute fresh outline; only use deferred one for rendering
-  const outline = useOutline(markdown);
+  // Outline now comes from CM6 (single source of truth)
+  const [outline, setOutline] = useState<Heading[]>([]);
   const deferredOutline = useDeferredValue(outline);
 
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
-  const getOutline = useCallback(() => deferredOutline, [deferredOutline]);
-
-  // Exposed by CM scroll‑spy
-  const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
-  
-  // Centralized heading change coordination
-  const isUserScrollingRef = useRef(false);
-  const programmaticScrollRef = useRef(false);
+  // No external scroll-spy / suppression needed
 
   const onStartResize = useCallback(() => {
     setIsResizing(true);
@@ -100,109 +93,30 @@ Final deep content.`);
     sc.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }
 
-  /**
-   * Centralized heading change handler - prevents race conditions
-   */
-  const handleActiveHeadingChange = useCallback((id: string | null, source: 'scrollspy' | 'caret' | 'click') => {
-    // During programmatic scroll, only allow click source
-    if (programmaticScrollRef.current && source !== 'click') {
-      return;
-    }
-    
-    // During user scroll, prioritize scrollspy
-    if (isUserScrollingRef.current && source === 'caret') {
-      return;
-    }
-    
+  // CM drives active heading; clicks will set it optimistically too
+  const handleActiveHeadingChange = useCallback((id: string | null) => {
     setActiveHeadingId(id);
   }, []);
 
-  /**
-   * Jump to a heading. Uses the FRESHEST outline (not deferred) and,
-   * when provided, resolves by (id, expectedOffset) to avoid duplicates.
-   */
-  const onSelectHeading = useCallback((id: string, expectedOffset?: number) => {
-    // 1) Resolve in fresh outline first
-    let h = expectedOffset != null
-      ? outline.find(o => o.id === id && o.offset === expectedOffset)
-      : undefined;
-    if (!h) h = outline.find(o => o.id === id);
-
-    // 2) Fallback to deferred if needed (very rare)
-    if (!h && expectedOffset != null) {
-      h = deferredOutline.find(o => o.id === id && o.offset === expectedOffset);
-    }
-    if (!h) h = deferredOutline.find(o => o.id === id);
+  /** Jump to a heading by exact offset (no id reconciliation). */
+  const onSelectHeading = useCallback((offset: number) => {
+    const h = outline.find(o => o.offset === offset);
     if (!h) return;
-
-    // Mark as programmatic scroll and suppress spy
-    programmaticScrollRef.current = true;
-    suppressScrollSpyRef.current?.(2000); // Longer suppression
-    
-    // Immediately set the target heading (prevents race)
-    handleActiveHeadingChange(h.id, 'click');
-
+    // Optimistic highlight to keep sidebar snappy
+    handleActiveHeadingChange(h.id);
     const pos = caretAtHeadingEnd(markdown, h);
     cmRef.current?.setSelectionAt(pos);
 
     const view = cmRef.current?.getView();
     if (view) {
       smoothScrollTo(view, pos, 24, 0.34);
-
-      // Enhanced stability detection
-      const sc = view.scrollDOM;
-      let last = sc.scrollTop;
-      let still = 0;
-      const tick = () => {
-        const now = sc.scrollTop;
-        if (Math.abs(now - last) < 0.3) {
-          if (++still >= 6) { 
-            // End programmatic scroll mode
-            programmaticScrollRef.current = false;
-            suppressScrollSpyRef.current?.(0); 
-            return; 
-          }
-        } else {
-          still = 0; last = now;
-        }
-        requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
     }
-  }, [outline, deferredOutline, markdown, handleActiveHeadingChange]);
+  }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
 
-  // User scroll detection
-  useEffect(() => {
-    const view = cmRef.current?.getView();
-    if (!view) return;
-    
-    const scrollDOM = view.scrollDOM;
-    let scrollTimeout: NodeJS.Timeout | null = null;
-    
-    const onUserScroll = () => {
-      if (!programmaticScrollRef.current) {
-        isUserScrollingRef.current = true;
-        if (scrollTimeout) clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-          isUserScrollingRef.current = false;
-        }, 150);
-      }
-    };
-    
-    scrollDOM.addEventListener('scroll', onUserScroll, { passive: true });
-    scrollDOM.addEventListener('wheel', onUserScroll, { passive: true });
-    scrollDOM.addEventListener('touchmove', onUserScroll, { passive: true });
-    
-    return () => {
-      scrollDOM.removeEventListener('scroll', onUserScroll);
-      scrollDOM.removeEventListener('wheel', onUserScroll);
-      scrollDOM.removeEventListener('touchmove', onUserScroll);
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-    };
-  }, []);
+  // No user scroll bookkeeping needed anymore
 
   // Mouse + touch resize (kept from your earlier version)
   useEffect(() => {
@@ -254,10 +168,10 @@ Final deep content.`);
       }}
     >
       <OutlinePane
-        outline={deferredOutline}            // render-friendly
+        outline={deferredOutline}
         activeHeadingId={activeHeadingId}
         onStartResize={onStartResize}
-        onSelectHeading={onSelectHeading}    // (id, expectedOffset?) supported
+        onSelectHeading={onSelectHeading}    // offset only
         onBumpWidth={(d) => {
           setOutlineWidth(prev => Math.min(Math.max(prev + d, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
         }}
@@ -273,9 +187,8 @@ Final deep content.`);
           narrow={narrow}
           toggleNarrow={toggleNarrow}
           onReady={setCmView}
-          getOutline={() => deferredOutline}
-          onActiveHeadingChange={(id, source) => handleActiveHeadingChange(id, source)}
-          onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
+          onOutlineChange={setOutline}
+          onActiveHeadingChange={(id) => handleActiveHeadingChange(id)}
         />
       </div>
     </div>

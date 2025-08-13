@@ -26,7 +26,7 @@ type OutlinePaneProps = {
   outline: Heading[];
   activeHeadingId: string | null;
   onStartResize: () => void;
-  onSelectHeading: (id: string, expectedOffset?: number) => void;
+  onSelectHeading: (offset: number) => void;
   onBumpWidth: (delta: number) => void;
 };
 
@@ -244,8 +244,8 @@ export const OutlinePane = React.memo(function OutlinePane({
                   canFold={canFold}
                   isFolded={isFolded}
                   onToggle={() => toggleFold(h.id)}
-                  // Pass both id and offset so App resolves precisely AND uses the fresh outline
-                  onClick={() => onSelectHeading(h.id, h.offset)}
+                  // Navigate by precise offset (no id reconciliation)
+                  onClick={() => onSelectHeading(h.offset)}
                 />
               </div>
             );
