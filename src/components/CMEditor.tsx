@@ -141,7 +141,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           },
           /* Dark grey active line + selection */
           ".cm-activeLine": {
-            backgroundColor: "rgba(55, 65, 81, 0.14)" /* ~#374151 @ 14% */
+            backgroundColor: "#374151" /* Dark grey highlight */
           },
           "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
             backgroundColor: "rgba(55, 65, 81, 0.24) !important"
