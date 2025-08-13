@@ -92,16 +92,6 @@ Final deep content.`);
     return Math.min(md.length, h.offset + trimmedLine.length);
   }
 
-  // Smooth scroll to pos with a slightly lower bias (keeps current heading dominant)
-  function smoothScrollTo(view: EditorView, pos: number, margin = 24, bias = 0.34) {
-    const rect = view.coordsAtPos(pos);
-    if (!rect) return;
-    const sc = view.scrollDOM;
-    const scRect = sc.getBoundingClientRect();
-    const anchorDelta = sc.clientHeight * bias;
-    const targetTop = (rect.top - scRect.top) + sc.scrollTop - anchorDelta - margin;
-    sc.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-  }
 
   // CM drives active heading; clicks will set it optimistically too
   const handleActiveHeadingChange = useCallback((id: string | null) => {
@@ -121,10 +111,10 @@ Final deep content.`);
     // 1. Place the caret exactly at end-of-heading (cursor, not range) and focus
     cmRef.current?.setSelectionAt(pos);
 
-    // 2. Use CM6 native scrollIntoView (already exposed by the editor handle)
-    cmRef.current?.scrollToOffsetExact(pos, "center");
-    // Briefly pause scroll-spy so it doesn't immediately override the optimistic highlight
-    suppressScrollSpyRef.current?.(600);
+    // 2. Native CM6 scroll — align heading to TOP to avoid "previous header" selection
+    cmRef.current?.scrollToOffsetExact(h.offset, "top");
+    // Give scroll-spy a short pause so it doesn't immediately re-pick based on anchor
+    suppressScrollSpyRef.current?.(900);
   }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup

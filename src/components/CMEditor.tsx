@@ -67,11 +67,11 @@ function computeOutlineFromDoc(doc: string): Heading[] {
   const lines = doc.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    // ATX style: #..###### Heading [optional trailing #...]
-    const m = /^(#{1,6})\s+(.*)$/.exec(line);
+    // ATX style with up to 3 leading spaces: ^\s{0,3}#{1,6}\s+Heading [optional trailing #...]
+    const m = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (m) {
       const level = m[1].length;
-      const raw = m[2].replace(/\s*#+\s*$/, "").trim();
+      const raw = m[2].trim();
       const id = `${slugify(raw) || "heading"}@${offset}`;
       out.push({ id, level, text: raw, offset });
     }
@@ -158,9 +158,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     const rect = sc.getBoundingClientRect();
     if (rect.height <= 0) return;
 
-    // Biased anchor (~top third) to keep the section you're reading "sticky"
-    const anchorY = rect.top + rect.height * 0.34;
-    const anchorX = Math.min(rect.right - 8, rect.left + 40);
+    // Anchor near the top of the viewport to avoid skipping short sections
+    const anchorY = rect.top + 8;
+    const anchorX = rect.left + 8;
     const at = view.posAtCoords({ x: anchorX, y: anchorY });
     if (!at) return;
 
@@ -303,7 +303,22 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     };
     onScrollSpyReadyRef.current?.(suppress);
 
+    // Smooth-scroll tracking: call updateActiveFromViewport on every scroll,
+    // but coalesce to one call per animation frame.
+    let ticking = false;
+    const onScroll = () => {
+      if (performance.now() <= suppressUntilRef.current) return;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        updateActiveFromViewport(view);
+      });
+    };
+    view.scrollDOM.addEventListener('scroll', onScroll, { passive: true });
+
     return () => {
+      view.scrollDOM.removeEventListener('scroll', onScroll);
       view.destroy();
       viewRef.current = null;
     };
