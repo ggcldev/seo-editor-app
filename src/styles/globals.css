@@ -39,3 +39,15 @@
 .editor-shell > div:nth-child(2) { /* the editor column wrapper */
   overflow: hidden;
 }
+
+/* Hide outline scrollbars (still scrollable) */
+.outline-pane {
+  /* Firefox */
+  scrollbar-width: none;
+  /* IE/Edge legacy */
+  -ms-overflow-style: none;
+}
+.outline-pane::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

@@ -138,6 +138,16 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
               "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
             fontSize: "14px",
             lineHeight: "1.8"
+          },
+          /* Dark grey active line + selection */
+          ".cm-activeLine": {
+            backgroundColor: "rgba(55, 65, 81, 0.14)" /* ~#374151 @ 14% */
+          },
+          "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+            backgroundColor: "rgba(55, 65, 81, 0.24) !important"
+          },
+          ".cm-cursor": {
+            borderLeftColor: "#374151"
           }
         }),
         EditorView.updateListener.of((u) => {

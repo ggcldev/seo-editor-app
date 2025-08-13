@@ -48,7 +48,7 @@ Final deep content.`);
     });
   }, []);
 
-  const [narrow, setNarrow] = useState(false);
+  const [narrow, setNarrow] = useState(true);
   const [outlineWidth, setOutlineWidth] = useState(OUTLINE_CONFIG.DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
 
