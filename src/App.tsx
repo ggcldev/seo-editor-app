@@ -67,16 +67,13 @@ Final deep content.`);
   const outline = useOutline(markdown);
   const deferredOutline = useDeferredValue(outline); // <- render later if typing
 
-  // Active heading driven by CM scroll‑spy
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const getOutline = useCallback(() => deferredOutline, [deferredOutline]);
 
-  // Exposed by CM: call to temporarily suppress scroll‑spy
+  // scroll-spy suppression
   const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
 
-
-  // ---- UI handlers ---------------------------------------------------------
-
+  // ---- resize handlers ------------------------------------------------------
   const onStartResize = useCallback(() => {
     setIsResizing(true);
     document.body.classList.add('noselect');
@@ -89,9 +86,9 @@ Final deep content.`);
     });
   }, []);
 
+  // ---- helpers --------------------------------------------------------------
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
 
-  // Compute caret position at the end of a heading line
   function caretAtHeadingEnd(md: string, h: { offset: number }) {
     const nl = md.indexOf('\n', h.offset);
     const lineEnd = nl === -1 ? md.length : nl;
@@ -100,39 +97,58 @@ Final deep content.`);
     return h.offset + trimmed.length;
   }
 
-  // Centered smooth scroll with margin
   function smoothScrollToCenter(view: EditorView, pos: number, margin = 24, bias = 0.5) {
     const rect = view.coordsAtPos(pos);
     if (!rect) return;
-
     const sc = view.scrollDOM;
     const scRect = sc.getBoundingClientRect();
     const anchorDelta = sc.clientHeight * bias;
-
     const targetTop =
-      (rect.top - scRect.top) +
-      sc.scrollTop -
-      anchorDelta -
-      margin;
-
+      (rect.top - scRect.top) + sc.scrollTop - anchorDelta - margin;
     sc.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }
 
-  // Jump to heading from outline (suppress spy during programmatic scroll)
-  const onSelectHeading = useCallback((id: string) => {
-    const h = deferredOutline.find(o => o.id === id);
+  // ⬇️ MAIN FIX: resolve by (id, offset) so duplicates don't jump to the first instance
+  const onSelectHeading = useCallback((id: string, expectedOffset?: number) => {
+    // Prefer exact (id, offset) if provided
+    let h = expectedOffset != null
+      ? deferredOutline.find(o => o.id === id && o.offset === expectedOffset)
+      : undefined;
+
+    // Fallback: first matching id
+    if (!h) h = deferredOutline.find(o => o.id === id);
     if (!h) return;
 
-    // Heuristic: 700–900ms covers typical smooth scrolls; keep your 1200ms if you prefer.
-    suppressScrollSpyRef.current?.(900);
+    // Suppress scroll-spy longer than the typical smooth scroll to avoid fights
+    suppressScrollSpyRef.current?.(1200);
 
     const pos = caretAtHeadingEnd(markdown, h);
     cmRef.current?.setSelectionAt(pos);
 
     const view = cmRef.current?.getView();
-    if (view) smoothScrollToCenter(view, h.offset, 24, 0.5);
+    if (view) {
+      smoothScrollToCenter(view, h.offset, 24, 0.5);
 
-    setActiveHeadingId(id); // optimistic; plugin will confirm next tick
+      // Optional: end suppression early when scrolling settles
+      const sc = view.scrollDOM;
+      let last = sc.scrollTop;
+      let still = 0;
+      const tick = () => {
+        const now = sc.scrollTop;
+        if (Math.abs(now - last) < 1) {
+          still++;
+          if (still >= 3) return; // ~3 frames stable → we're done
+        } else {
+          still = 0;
+          last = now;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
+    // Optimistic active id; plugin will confirm
+    setActiveHeadingId(h.id);
   }, [deferredOutline, markdown]);
 
 
@@ -195,7 +211,7 @@ Final deep content.`);
         outline={deferredOutline}
         activeHeadingId={activeHeadingId}
         onStartResize={onStartResize}
-        onSelectHeading={onSelectHeading}
+        onSelectHeading={onSelectHeading} // now (id, offset)
         // NEW: keyboard bump (a11y)
         onBumpWidth={onBumpWidth}
       />
@@ -206,7 +222,7 @@ Final deep content.`);
           ref={cmRef}
           markdown={markdown}
           setMarkdown={setMarkdown}
-          onCaretChange={() => { /* keep for caret-driven behaviors */ }}
+          onCaretChange={() => {}}
           narrow={narrow}
           toggleNarrow={toggleNarrow}
           onReady={setCmView}

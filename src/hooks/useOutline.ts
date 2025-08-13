@@ -1,41 +1,103 @@
-import { useEffect, useRef, useState } from "react";
-import { toId } from "../utils/ids";
-import { idleCallback, cancelIdleCallback } from "../utils/idleCallback";
+// hooks/useOutline.ts
+import { useMemo } from "react";
+import { makeHeadingId } from "../utils/ids";
 
-export type Heading = { level: 1|2|3|4|5|6; text: string; id: string; offset: number };
+export type Heading = {
+  id: string;
+  text: string;
+  level: number;   // 1..6
+  offset: number;  // absolute char index of the heading line start
+};
 
+/**
+ * Parse Markdown headings (ATX # and Setext =/-) into a flat outline.
+ * - Offsets are exact char positions in the source string, used for id uniqueness.
+ * - Setext underlines produce level 1 (=) or level 2 (-) headings.
+ * - Fenced code blocks are ignored so leading '#' in code doesn't create headings.
+ */
 export function useOutline(markdown: string): Heading[] {
-  const [headings, setHeadings] = useState<Heading[]>([]);
-  const workerRef = useRef<Worker | null>(null);
+  return useMemo(() => {
+    const out: Heading[] = [];
+    const len = markdown.length;
 
-  // create / teardown once
-  useEffect(() => {
-    const w = new Worker(new URL("../workers/outlineWorker.ts", import.meta.url), { type: "module" });
-    workerRef.current = w;
-    w.onmessage = (e: MessageEvent<{ level: number; text: string; offset: number }[]>) => {
-      const raw = e.data as { level: number; text: string; offset: number }[];
-      const seen = new Map<string, number>();
-      const items: Heading[] = raw.map((h) => {
-        const base = toId(h.text);
-        const count = seen.get(base) ?? 0;
-        seen.set(base, count + 1);
-        const id = count === 0 ? base : `${base}-${count}`;
-        return { level: h.level as Heading["level"], text: h.text, offset: h.offset, id };
-      });
-      setHeadings(items);
-    };
-    return () => { w.terminate(); workerRef.current = null; };
-  }, []);
+    let i = 0;
+    let lineStart = 0;
+    let inFence: null | { fence: string } = null;
 
-  // post updates when markdown changes (with idle defer to reduce churn during typing)
-  useEffect(() => {
-    const post = () => workerRef.current?.postMessage(markdown || "");
-    const idleId = idleCallback(post, 120);
-    return () => cancelIdleCallback(idleId);
+    // Precompute line starts for efficient scanning
+    while (i <= len) {
+      // Find end of current line
+      let lineEnd = markdown.indexOf("\n", i);
+      if (lineEnd === -1) lineEnd = len;
+
+      const line = markdown.slice(i, lineEnd);
+      const trimmed = line.trimEnd();
+
+      // Fence detection: ``` or ~~~ start/end (ignore language)
+      const fenceMatch = line.match(/^(\s*)(`{3,}|~{3,})/);
+      if (fenceMatch) {
+        const fence = fenceMatch[2][0];
+        if (!inFence) {
+          inFence = { fence: fenceMatch[2] };
+        } else if (line.startsWith(inFence.fence)) {
+          inFence = null; // closing fence
+        }
+        // Advance
+        i = lineEnd + 1;
+        lineStart = i;
+        continue;
+      }
+
+      if (!inFence) {
+        // ATX headings: ^\s*#{1,6}\s+Title [###]?
+        const atx = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+        if (atx) {
+          const level = Math.min(6, atx[1].length);
+          const text = atx[2].trim();
+          const offset = i; // start of the line
+          out.push({
+            id: makeHeadingId(text, offset),
+            text,
+            level,
+            offset
+          });
+        } else {
+          // Setext: a non-empty line followed by === or --- (next line)
+          // Only detect if current line has non-whitespace
+          if (trimmed.length > 0) {
+            // lookahead next line
+            let nextStart = lineEnd + 1;
+            if (nextStart <= len) {
+              let nextEnd = markdown.indexOf("\n", nextStart);
+              if (nextEnd === -1) nextEnd = len;
+              const nextLine = markdown.slice(nextStart, nextEnd);
+              const setext = nextLine.match(/^\s*(=+|-+)\s*$/);
+              if (setext) {
+                const isEq = setext[1][0] === "=";
+                const level = isEq ? 1 : 2;
+                const text = trimmed;
+                const offset = i;
+                out.push({
+                  id: makeHeadingId(text, offset),
+                  text,
+                  level,
+                  offset
+                });
+                // Skip the underline line
+                i = nextEnd + 1;
+                lineStart = i;
+                continue; // continue outer loop
+              }
+            }
+          }
+        }
+      }
+
+      // Advance to next line
+      i = lineEnd + 1;
+      lineStart = i;
+    }
+
+    return out;
   }, [markdown]);
-
-  return headings;
 }
-
-
-
