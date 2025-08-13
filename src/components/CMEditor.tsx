@@ -169,6 +169,14 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     if (nextId !== lastActiveIdRef.current) {
       lastActiveIdRef.current = nextId;
       onActiveHeadingChangeRef.current(nextId, "scroll");
+      
+      // Move caret to the detected heading to keep editor and outline in sync
+      if (match) {
+        view.dispatch({ 
+          selection: EditorSelection.cursor(match.h.offset),
+          scrollIntoView: false // Don't scroll, we're already at the right position
+        });
+      }
     }
   }
 
@@ -180,6 +188,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         keymap.of([...defaultKeymap, ...historyKeymap]),
         mdLang(),
         EditorView.lineWrapping,
+        // Keep ~72px breathing room when we scroll a position into view.
+        EditorView.scrollMargins.of(() => ({ top: 72, bottom: 24 })),
         // Active-line goes through a Compartment (ON/OFF)
         activeLineComp.of(highlightOn ? highlightActiveLine() : []),
         EditorView.theme({
