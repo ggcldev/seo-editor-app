@@ -12,6 +12,8 @@ type Props = {
   onCaretChange: (pos: number) => void;
   narrow: boolean;
   toggleNarrow: () => void;
+  highlightOn: boolean;
+  toggleHighlight: () => void;
   onReady?: (view: EditorView) => void;
   /** Called whenever CM recomputes the outline from the current doc */
   onOutlineChange: (outline: Heading[]) => void;
@@ -93,12 +95,15 @@ function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextO
 }
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, onOutlineChange, onActiveHeadingChange, onScrollSpyReady },
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady, onOutlineChange, onActiveHeadingChange, onScrollSpyReady },
   ref
 ) {
-  const [highlightEnabled, setHighlightEnabled] = useState(false); // default off
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  
+  // Toggleable compartments
+  const activeLineComp = useRef(new Compartment()).current;
+  const themeComp = useRef(new Compartment()).current;
 
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
@@ -122,94 +127,97 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
   useEffect(() => {
-    const extensions = [
-      history(),
-      keymap.of([...defaultKeymap, ...historyKeymap]),
-      mdLang(),
-      EditorView.lineWrapping,
-      highlightEnabled
-        ? highlightActiveLine()
-        : EditorView.theme({
-            ".cm-activeLine": { backgroundColor: "transparent !important" },
-            ".cm-activeLineGutter": { backgroundColor: "transparent !important" }
-          }),
-      EditorView.theme({
-        "&": { height: "100%" },
-        ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" as any },
-        ".cm-content": {
-          fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-          fontSize: "14px",
-          lineHeight: "1.8"
-        }
-      }),
-      ...(highlightEnabled
-        ? [
-            EditorView.theme({
-              ".cm-activeLine": { backgroundColor: "rgba(55, 65, 81, 0.14)" }, // ON default (dark grey)
-              "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
-                backgroundColor: "rgba(55, 65, 81, 0.24) !important"
-              },
-              ".cm-cursor": { borderLeftColor: "#374151" }
-            })
-          ]
-        : []),
-      EditorView.updateListener.of((u) => {
-        // Keep upstream state in sync
-        if (u.docChanged) onChangeRef.current(u.state.doc.toString());
-        if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
-
-        // Recompute outline on doc changes (single source of truth)
-        if (u.docChanged) {
-          const next = computeOutlineFromDoc(u.state.doc.toString());
-          // Shallow compare (length + last id/offset) to avoid noisy updates
-          const prev = outlineRef.current;
-          const changed =
-            prev.length !== next.length ||
-            (prev.length && next.length &&
-             (prev[prev.length - 1].offset !== next[next.length - 1].offset ||
-              prev[prev.length - 1].id !== next[next.length - 1].id));
-          if (changed) {
-            outlineRef.current = next;
-            onOutlineChangeRef.current(next);
-          }
-        }
-
-        // CARET-wins: derive active heading from caret against CM's current outline  
-        if ((u.selectionSet || u.docChanged) && performance.now() > suppressUntilRef.current) {
-          const pos = u.state.selection.main.head;
-          const match = findHeadingForPos(outlineRef.current, pos);
-          if (match) {
-            const lineAtHeading = u.state.doc.lineAt(match.h.offset);
-            const caretLine = u.state.doc.lineAt(pos);
-            const caretOnHeadingLine = caretLine.from === lineAtHeading.from;
-            if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
-              onActiveHeadingChangeRef.current(match.h.id, "caret");
-            }
-          } else {
-            onActiveHeadingChangeRef.current(null, "caret");
-          }
-        }
-      }),
-      EditorView.domEventHandlers({
-        paste: (event, view) => {
-          const html = (event as ClipboardEvent).clipboardData?.getData("text/html");
-          if (!html) return false;
-          event.preventDefault();
-          const md = htmlToMdRef.current(html);
-          const sel = view.state.selection.main;
-          view.dispatch({
-            changes: { from: sel.from, to: sel.to, insert: md },
-            selection: EditorSelection.cursor(sel.from + md.length)
-          });
-          return true;
-        }
-      })
-    ];
 
     const state = EditorState.create({
       doc: markdown,
-      extensions
+      extensions: [
+        history(),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        mdLang(),
+        EditorView.lineWrapping,
+        // Active-line goes through a Compartment (ON/OFF)
+        activeLineComp.of(highlightOn ? highlightActiveLine() : []),
+        EditorView.theme({
+          "&": { height: "100%" },
+          ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" as any },
+          ".cm-content": {
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+            fontSize: "14px",
+            lineHeight: "1.8"
+          },
+          /* Subtly thicker caret; feels "alive" without being chunky */
+          ".cm-cursor": {
+            borderLeftWidth: "2px",
+            borderLeftColor: "#374151"
+          }
+        }),
+        // Cursor + (optional) highlight colors live here
+        themeComp.of(EditorView.theme({
+          // Thicker caret for "breathing" feel (subtle)
+          ".cm-cursor": { borderLeftWidth: "2px", borderLeftColor: "#374151" },
+          // When highlight is OFF we forcibly keep the band invisible.
+          ".cm-activeLine": { backgroundColor: highlightOn ? "rgba(55,65,81,0.14)" : "transparent" },
+          ".cm-activeLineGutter": { backgroundColor: highlightOn ? "rgba(55,65,81,0.10)" : "transparent" },
+          // Slightly darker selection when ON; default browser selection when OFF
+          ...(highlightOn ? {
+            "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+              backgroundColor: "rgba(55,65,81,0.24) !important"
+            }
+          } : {})
+        })),
+        EditorView.updateListener.of((u) => {
+          // Keep upstream state in sync
+          if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+          if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
+
+          // Recompute outline on doc changes (single source of truth)
+          if (u.docChanged) {
+            const next = computeOutlineFromDoc(u.state.doc.toString());
+            // Shallow compare (length + last id/offset) to avoid noisy updates
+            const prev = outlineRef.current;
+            const changed =
+              prev.length !== next.length ||
+              (prev.length && next.length &&
+               (prev[prev.length - 1].offset !== next[next.length - 1].offset ||
+                prev[prev.length - 1].id !== next[next.length - 1].id));
+            if (changed) {
+              outlineRef.current = next;
+              onOutlineChangeRef.current(next);
+            }
+          }
+
+          // CARET-wins: derive active heading from caret against CM's current outline  
+          if ((u.selectionSet || u.docChanged) && performance.now() > suppressUntilRef.current) {
+            const pos = u.state.selection.main.head;
+            const match = findHeadingForPos(outlineRef.current, pos);
+            if (match) {
+              const lineAtHeading = u.state.doc.lineAt(match.h.offset);
+              const caretLine = u.state.doc.lineAt(pos);
+              const caretOnHeadingLine = caretLine.from === lineAtHeading.from;
+              if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
+                onActiveHeadingChangeRef.current(match.h.id, "caret");
+              }
+            } else {
+              onActiveHeadingChangeRef.current(null, "caret");
+            }
+          }
+        }),
+        EditorView.domEventHandlers({
+          paste: (event, view) => {
+            const html = (event as ClipboardEvent).clipboardData?.getData("text/html");
+            if (!html) return false;
+            event.preventDefault();
+            const md = htmlToMdRef.current(html);
+            const sel = view.state.selection.main;
+            view.dispatch({
+              changes: { from: sel.from, to: sel.to, insert: md },
+              selection: EditorSelection.cursor(sel.from + md.length)
+            });
+            return true;
+          }
+        })
+      ]
     });
 
     const parent = hostRef.current;
@@ -226,23 +234,44 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
 
     return () => { view.destroy(); viewRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [highlightEnabled]); // rebuild when toggled
+  }, []); // init once
+
+  // Reconfigure highlight ON/OFF without rebuilding the editor
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: [
+        activeLineComp.reconfigure(highlightOn ? highlightActiveLine() : []),
+        themeComp.reconfigure(EditorView.theme({
+          ".cm-cursor": { borderLeftWidth: "2px", borderLeftColor: "#374151" },
+          ".cm-activeLine": { backgroundColor: highlightOn ? "rgba(55,65,81,0.14)" : "transparent" },
+          ".cm-activeLineGutter": { backgroundColor: highlightOn ? "rgba(55,65,81,0.10)" : "transparent" },
+          ...(highlightOn ? {
+            "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+              backgroundColor: "rgba(55,65,81,0.24) !important"
+            }
+          } : {})
+        }))
+      ]
+    });
+  }, [highlightOn, activeLineComp, themeComp]);
 
   // Hotkey: Ctrl/⌘ + Alt + H to toggle
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const handler = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toLowerCase().includes("mac");
+      const isMac = /mac/i.test(navigator.platform);
       const cmd = isMac ? e.metaKey : e.ctrlKey;
       if (cmd && e.altKey && (e.key === "h" || e.key === "H")) {
         e.preventDefault();
-        setHighlightEnabled(h => !h);
+        toggleHighlight();
       }
     };
     view.dom.addEventListener("keydown", handler);
     return () => view.dom.removeEventListener("keydown", handler);
-  }, []);
+  }, [toggleHighlight]);
 
   // Prop → editor sync (preserve full selection range)
   useEffect(() => {
@@ -295,13 +324,13 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           </button>
           <button
             type="button"
-            onClick={() => setHighlightEnabled(h => !h)}
-            style={{ ...STYLES.button, right: 120 }}   // sit left of the width toggle
-            aria-label={`Toggle highlight (${highlightEnabled ? "on" : "off"})`}
-            aria-pressed={highlightEnabled}
+            onClick={toggleHighlight}
+            style={{ ...STYLES.button, right: 120 }}
+            aria-label={`Toggle active-line highlight (${highlightOn ? "on" : "off"})`}
+            aria-pressed={highlightOn}
             title="Toggle editor highlight (Ctrl/⌘+Alt+H)"
           >
-            {highlightEnabled ? "Disable Highlight" : "Enable Highlight"}
+            Highlight: {highlightOn ? "On" : "Off"}
           </button>
           <div ref={hostRef} style={STYLES.editorHost} />
         </div>

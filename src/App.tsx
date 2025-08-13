@@ -3,6 +3,7 @@ import type { Heading } from './hooks/useOutline';
 import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
 import { EditorView } from '@codemirror/view';
+import { EditorSelection } from '@codemirror/state';
 import { MetricsBar } from './components/MetricsBar';
 import { normalizeEOL } from './utils/eol';
 import './styles/globals.css';
@@ -49,6 +50,13 @@ Final deep content.`);
   }, []);
 
   const [narrow, setNarrow] = useState(true);
+  // Editor highlight (active-line band) — default OFF, persisted
+  const [highlightOn, setHighlightOn] = useState<boolean>(() => {
+    const saved = localStorage.getItem('highlightOn');
+    return saved === null ? false : saved === 'true';
+  });
+  useEffect(() => { localStorage.setItem('highlightOn', String(highlightOn)); }, [highlightOn]);
+  
   const [outlineWidth, setOutlineWidth] = useState(OUTLINE_CONFIG.DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -72,6 +80,7 @@ Final deep content.`);
   }, []);
 
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
+  const toggleHighlight = useCallback(() => setHighlightOn(v => !v), []);
 
   // Caret just after visible heading text
   function caretAtHeadingEnd(md: string, h: { offset: number }) {
@@ -112,8 +121,9 @@ Final deep content.`);
     const view = cmRef.current?.getView();
     if (!view) return;
 
-    // 1. Place the caret at the heading (ensures coordsAtPos works correctly)
-    view.dispatch({ selection: { anchor: pos } });
+    // 1. Place the caret exactly at end-of-heading (cursor, not range) and focus
+    view.dispatch({ selection: EditorSelection.cursor(pos) });
+    view.focus();
 
     // 2. Get pixel coordinates for the target position
     const rect = view.coordsAtPos(pos);
@@ -220,6 +230,8 @@ Final deep content.`);
           onCaretChange={() => {}}
           narrow={narrow}
           toggleNarrow={toggleNarrow}
+          highlightOn={highlightOn}
+          toggleHighlight={toggleHighlight}
           onReady={setCmView}
           onOutlineChange={setOutline}
           onActiveHeadingChange={(id) => handleActiveHeadingChange(id)}
