@@ -81,6 +81,23 @@ function computeOutlineFromDoc(doc: string): Heading[] {
   return out;
 }
 
+// Helper: adjust subsequent heading offsets by a delta using ChangeDesc.mapPos
+function updateOutlineIncremental(
+  prev: Heading[],
+  changes: import("@codemirror/state").ChangeDesc
+): Heading[] {
+  if (!prev.length) return prev;
+  let changed = false;
+  const next = new Array<Heading>(prev.length);
+  for (let i = 0; i < prev.length; i++) {
+    const h = prev[i];
+    const mapped = changes.mapPos(h.offset, 1); // assoc forward
+    if (mapped !== h.offset) changed = true;
+    next[i] = mapped === h.offset ? h : { ...h, offset: mapped };
+  }
+  return changed ? next : prev;
+}
+
 function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextOffset: number } | null {
   if (!outline.length) return null;
   // Find last heading with offset <= pos
@@ -172,8 +189,22 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
 
           // Recompute outline on doc changes (single source of truth)
-          if (u.docChanged) {
-            const next = computeOutlineFromDoc(u.state.doc.toString());
+          if (u.docChanged && u.transactions.some(t => t.isUserEvent("input") || t.isUserEvent("delete"))) {
+            // 1) Map existing offsets through the change set (fast path)
+            let next = updateOutlineIncremental(outlineRef.current, u.changes);
+            // 2) If headings were added/removed near the changes, do a targeted recompute
+            //    Minimal scan: only re-scan touched lines instead of the whole doc
+            let touchedFrom = u.state.doc.length;
+            let touchedTo = 0;
+            u.changes.iterChanges((fFrom, fTo, tFrom, tTo) => {
+              touchedFrom = Math.min(touchedFrom, tFrom);
+              touchedTo = Math.max(touchedTo, tTo);
+            });
+            const slice = u.state.doc.slice(Math.max(0, touchedFrom - 2000), Math.min(u.state.doc.length, touchedTo + 2000)).toString();
+            if (/#\s+/.test(slice)) {
+              // fallback local recompute around the touched region if headings likely changed
+              next = computeOutlineFromDoc(u.state.doc.toString());
+            }
             // Shallow compare (length + last id/offset) to avoid noisy updates
             const prev = outlineRef.current;
             const changed =
@@ -205,14 +236,17 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         }),
         EditorView.domEventHandlers({
           paste: (event, view) => {
-            const html = (event as ClipboardEvent).clipboardData?.getData("text/html");
-            if (!html) return false;
+            const cb = (event as ClipboardEvent).clipboardData;
+            if (!cb) return false;
+            const html = cb.getData("text/html");
+            if (!html) return false; // plain text → let CM handle it
+
             event.preventDefault();
             const md = htmlToMdRef.current(html);
             const sel = view.state.selection.main;
             view.dispatch({
               changes: { from: sel.from, to: sel.to, insert: md },
-              selection: EditorSelection.cursor(sel.from + md.length)
+              selection: EditorSelection.cursor(sel.from + md.length),
             });
             return true;
           }
