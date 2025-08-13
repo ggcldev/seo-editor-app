@@ -67,107 +67,116 @@ Final deep content.`);
   const outline = useOutline(markdown);
   const deferredOutline = useDeferredValue(outline); // <- render later if typing
 
-  // NEW: active heading controlled purely by CM plugin
+  // Active heading driven by CM scroll‑spy
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const getOutline = useCallback(() => deferredOutline, [deferredOutline]);
+
+  // Exposed by CM: call to temporarily suppress scroll‑spy
   const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
 
 
-  // Extract callbacks for stable references
+  // ---- UI handlers ---------------------------------------------------------
+
   const onStartResize = useCallback(() => {
     setIsResizing(true);
     document.body.classList.add('noselect');
   }, []);
 
+  const onBumpWidth = useCallback((delta: number) => {
+    setOutlineWidth(prev => {
+      const next = Math.min(Math.max(prev + delta, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH);
+      return next;
+    });
+  }, []);
+
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
 
-  // Helper to compute caret position at the end of a heading line
-  function caretAtHeadingEnd(markdown: string, h: { offset: number }) {
-    // Find end of the line that contains the heading
-    const nl = markdown.indexOf('\n', h.offset);
-    const lineEnd = nl === -1 ? markdown.length : nl;
-
-    // Slice the heading line text
-    const line = markdown.slice(h.offset, lineEnd);
-
-    // Trim any trailing " ###" and trailing spaces (ATX style like "## Title ###")
+  // Compute caret position at the end of a heading line
+  function caretAtHeadingEnd(md: string, h: { offset: number }) {
+    const nl = md.indexOf('\n', h.offset);
+    const lineEnd = nl === -1 ? md.length : nl;
+    const line = md.slice(h.offset, lineEnd);
     const trimmed = line.replace(/\s*#+\s*$/, '').replace(/\s+$/, '');
-
-    // Caret should sit right after the visible heading text
     return h.offset + trimmed.length;
   }
 
-  // Helper for smooth scrolling with center positioning and margin
+  // Centered smooth scroll with margin
   function smoothScrollToCenter(view: EditorView, pos: number, margin = 24, bias = 0.5) {
     const rect = view.coordsAtPos(pos);
     if (!rect) return;
 
     const sc = view.scrollDOM;
     const scRect = sc.getBoundingClientRect();
-
-    // Anchor row we want to land around (bias: 0=top, .5=center, .33≈one-third)
     const anchorDelta = sc.clientHeight * bias;
 
     const targetTop =
-      (rect.top - scRect.top)  // row's Y inside scroller
-      + sc.scrollTop           // current scroll offset
-      - anchorDelta            // bias to center/third
-      - margin;                // pleasant breathing room
+      (rect.top - scRect.top) +
+      sc.scrollTop -
+      anchorDelta -
+      margin;
 
-    sc.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+    sc.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }
 
-  // Heading click (jump) with smooth scroll to center
+  // Jump to heading from outline (suppress spy during programmatic scroll)
   const onSelectHeading = useCallback((id: string) => {
     const h = deferredOutline.find(o => o.id === id);
     if (!h) return;
-    
-    // Suppress scrollspy during programmatic scroll (1200ms should cover smooth scroll)
-    suppressScrollSpyRef.current?.(1200);
-    
-    // caret at end of heading line
+
+    // Heuristic: 700–900ms covers typical smooth scrolls; keep your 1200ms if you prefer.
+    suppressScrollSpyRef.current?.(900);
+
     const pos = caretAtHeadingEnd(markdown, h);
     cmRef.current?.setSelectionAt(pos);
-    
-    // Use smooth scroll to center with margin
+
     const view = cmRef.current?.getView();
-    if (view) {
-      smoothScrollToCenter(view, h.offset, 24, 0.5); // center with 24px margin
-    }
-    
-    // Optimistically set active (plugin will confirm next frame)
-    setActiveHeadingId(id);
+    if (view) smoothScrollToCenter(view, h.offset, 24, 0.5);
+
+    setActiveHeadingId(id); // optimistic; plugin will confirm next tick
   }, [deferredOutline, markdown]);
 
 
   // Body class leak guard - ensure 'noselect' is cleaned up on unmount
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
 
+  // Mouse + touch resize with rAF throttling
   useEffect(() => {
     if (!isResizing) return;
-    const onMove = (e: MouseEvent) => {
+
+    const move = (clientX: number) => {
       if (resizeRaf.current) return;
       resizeRaf.current = requestAnimationFrame(() => {
         resizeRaf.current = null;
         const shell = shellRef.current;
         if (!shell) return;
-        const x = e.clientX - shell.getBoundingClientRect().left;
+        const x = clientX - shell.getBoundingClientRect().left;
         const next = Math.min(Math.max(x, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH);
         setOutlineWidth(next);
       });
     };
-    const onUp = () => {
+
+    const onMouseMove = (e: MouseEvent) => move(e.clientX);
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (t) move(t.clientX);
+    };
+
+    const end = () => {
       setIsResizing(false);
       document.body.classList.remove('noselect');
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp, { once: true });
+
+    window.addEventListener('mousemove', onMouseMove, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('mouseup', end, { once: true });
+    window.addEventListener('touchend', end, { once: true });
+
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      if (resizeRaf.current) {
-        cancelAnimationFrame(resizeRaf.current);
-      }
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('mouseup', end);
+      window.removeEventListener('touchend', end);
+      if (resizeRaf.current) cancelAnimationFrame(resizeRaf.current);
     };
   }, [isResizing]);
 
@@ -182,11 +191,13 @@ Final deep content.`);
         height: '100vh' 
       }}
     >
-      <OutlinePane 
-        outline={deferredOutline} 
+      <OutlinePane
+        outline={deferredOutline}
         activeHeadingId={activeHeadingId}
         onStartResize={onStartResize}
         onSelectHeading={onSelectHeading}
+        // NEW: keyboard bump (a11y)
+        onBumpWidth={onBumpWidth}
       />
 
       <div style={{ position: 'relative' }}>
@@ -195,11 +206,10 @@ Final deep content.`);
           ref={cmRef}
           markdown={markdown}
           setMarkdown={setMarkdown}
-          onCaretChange={() => { /* keep if you want caret-driven behaviors */ }}
+          onCaretChange={() => { /* keep for caret-driven behaviors */ }}
           narrow={narrow}
           toggleNarrow={toggleNarrow}
           onReady={setCmView}
-          // NEW:
           getOutline={getOutline}
           onActiveHeadingChange={setActiveHeadingId}
           onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}

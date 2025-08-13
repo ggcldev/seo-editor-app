@@ -115,7 +115,7 @@ export function scrollSpyPlugin(
     }
 
     // Public method for programmatic scroll suppression
-    suppress(ms: number = 1200) {
+    suppress(ms: number = 900) {
       this.suppressUntil = performance.now() + ms;
     }
     }();
@@ -127,7 +127,7 @@ export function scrollSpyPlugin(
   // Return plugin with suppress method
   return {
     plugin,
-    suppress: (ms: number = 1200) => {
+    suppress: (ms: number = 900) => {
       if (pluginInstance) {
         pluginInstance.suppress(ms);
       }
