@@ -149,6 +149,27 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           },
           ".cm-cursor": {
             borderLeftColor: "#374151"
+          },
+          /* Transparent scrollbar on right side */
+          ".cm-scroller::-webkit-scrollbar": {
+            width: "8px",
+            backgroundColor: "transparent"
+          },
+          ".cm-scroller::-webkit-scrollbar-track": {
+            backgroundColor: "transparent"
+          },
+          ".cm-scroller::-webkit-scrollbar-thumb": {
+            backgroundColor: "rgba(0, 0, 0, 0.1)",
+            borderRadius: "4px",
+            border: "none"
+          },
+          ".cm-scroller::-webkit-scrollbar-thumb:hover": {
+            backgroundColor: "rgba(0, 0, 0, 0.2)"
+          },
+          /* Firefox */
+          ".cm-scroller": {
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgba(0, 0, 0, 0.1) transparent"
           }
         }),
         EditorView.updateListener.of((u) => {
