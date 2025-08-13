@@ -17,6 +17,8 @@ type Props = {
   onOutlineChange: (outline: Heading[]) => void;
   /** Called when CM detects the active heading (via caret/selection) */
   onActiveHeadingChange: (id: string | null, source: 'caret') => void;
+  /** Exposes scroll-spy suppression for clean navigation */
+  onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
 };
 
 export type CMHandle = {
@@ -91,7 +93,7 @@ function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextO
 }
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, onOutlineChange, onActiveHeadingChange },
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, onOutlineChange, onActiveHeadingChange, onScrollSpyReady },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -102,13 +104,16 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const onReadyRef = useRef(onReady);
   const onActiveHeadingChangeRef = useRef(onActiveHeadingChange);
   const onOutlineChangeRef = useRef(onOutlineChange);
+  const onScrollSpyReadyRef = useRef(onScrollSpyReady);
   const outlineRef = useRef<Heading[]>([]);
+  const suppressUntilRef = useRef(0);
 
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
   useEffect(() => { onActiveHeadingChangeRef.current = onActiveHeadingChange; }, [onActiveHeadingChange]);
   useEffect(() => { onOutlineChangeRef.current = onOutlineChange; }, [onOutlineChange]);
+  useEffect(() => { onScrollSpyReadyRef.current = onScrollSpyReady; }, [onScrollSpyReady]);
   useEffect(() => { outlineRef.current = computeOutlineFromDoc(markdown); onOutlineChangeRef.current(outlineRef.current); }, [markdown]);
 
   const { htmlToMarkdown } = usePasteToMarkdown();
@@ -156,8 +161,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             }
           }
 
-          // CARET-wins: derive active heading from caret against CM's current outline
-          if (u.selectionSet || u.docChanged) {
+          // CARET-wins: derive active heading from caret against CM's current outline  
+          if ((u.selectionSet || u.docChanged) && performance.now() > suppressUntilRef.current) {
             const pos = u.state.selection.main.head;
             const match = findHeadingForPos(outlineRef.current, pos);
             if (match) {
@@ -194,6 +199,12 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     const view = new EditorView({ state, parent });
     viewRef.current = view;
     onReadyRef.current?.(view);
+    
+    // Expose suppress function for navigation coordination
+    const suppress = (ms: number = 900) => {
+      suppressUntilRef.current = performance.now() + ms;
+    };
+    onScrollSpyReadyRef.current?.(suppress);
 
     return () => { view.destroy(); viewRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -62,7 +62,9 @@ Final deep content.`);
   const deferredOutline = useDeferredValue(outline);
 
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
-  // No external scroll-spy / suppression needed
+  
+  // Scroll-spy suppression for clean navigation
+  const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
 
   const onStartResize = useCallback(() => {
     setIsResizing(true);
@@ -98,35 +100,42 @@ Final deep content.`);
     setActiveHeadingId(id);
   }, []);
 
-  /** CM6-native, viewport-aware two-phase jump. */
+  /** Jump to a heading by exact offset (bulletproof CM6 native) */
   const onSelectHeading = useCallback((offset: number) => {
     const h = outline.find(o => o.offset === offset);
     if (!h) return;
-    handleActiveHeadingChange(h.id); // optimistic highlight
+
+    // Optimistic UI highlight
+    handleActiveHeadingChange(h.id);
 
     const pos = caretAtHeadingEnd(markdown, h);
     const view = cmRef.current?.getView();
     if (!view) return;
 
-    // Put caret at the target first (helps CM compute viewport & coords)
+    // 1. Place the caret at the heading (ensures coordsAtPos works correctly)
     view.dispatch({ selection: { anchor: pos } });
 
-    const { from, to } = view.viewport; // CM6 virtualized viewport (by doc offsets)
-    const nearBuffer = 2000;            // treat within ±2k chars as "near" (cheap to tune)
-    const isFar = pos < (from - nearBuffer) || pos > (to + nearBuffer);
+    // 2. Get pixel coordinates for the target position
+    const rect = view.coordsAtPos(pos);
+    if (!rect) return;
 
-    if (isFar) {
-      // Phase 1: instant snap; gets the line realized in the DOM immediately.
-      view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "start" }) });
+    const scroller = view.scrollDOM;
+    const scrollerTop = scroller.getBoundingClientRect().top;
+    const targetTop = rect.top - scrollerTop + scroller.scrollTop;
 
-      // Phase 2: next frame, short smooth nudge to bias placement (e.g., center/third).
+    // 3. If far away, snap instantly, then smooth adjust
+    const farThreshold = scroller.clientHeight * 3;
+    if (Math.abs(targetTop - scroller.scrollTop) > farThreshold) {
+      scroller.scrollTo({ top: targetTop - 24, behavior: "instant" });
       requestAnimationFrame(() => {
-        view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+        scroller.scrollTo({ top: targetTop - 24, behavior: "smooth" });
       });
     } else {
-      // Near target: just a short smooth scroll.
-      view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+      scroller.scrollTo({ top: targetTop - 24, behavior: "smooth" });
     }
+
+    // 4. Suppress scroll-spy until scrolling is stable
+    suppressScrollSpyRef.current?.(2000);
   }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup
@@ -205,6 +214,7 @@ Final deep content.`);
           onReady={setCmView}
           onOutlineChange={setOutline}
           onActiveHeadingChange={(id) => handleActiveHeadingChange(id)}
+          onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
         />
       </div>
     </div>
