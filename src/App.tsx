@@ -3,7 +3,6 @@ import type { Heading } from './hooks/useOutline';
 import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
 import { EditorView } from '@codemirror/view';
-import { EditorSelection } from '@codemirror/state';
 import { MetricsBar } from './components/MetricsBar';
 import { normalizeEOL } from './eol';
 import './globals.css';
@@ -118,43 +117,14 @@ Final deep content.`);
     handleActiveHeadingChange(h.id);
 
     const pos = caretAtHeadingEnd(markdown, h);
-    const view = cmRef.current?.getView();
-    if (!view) return;
 
     // 1. Place the caret exactly at end-of-heading (cursor, not range) and focus
-    view.dispatch({ selection: EditorSelection.cursor(pos) });
-    view.focus();
+    cmRef.current?.setSelectionAt(pos);
 
-    // 2. Get pixel coordinates for the target position
-    const rect = view.coordsAtPos(pos);
-    if (!rect) return;
-
-    const scroller = view.scrollDOM;
-    const scRect = scroller.getBoundingClientRect();
-    const targetTop = rect.top - scRect.top + scroller.scrollTop; // absolute y of heading in scroller
-
-    // Bias to center (keep ~12px headroom so the cursor isn't exactly on the mid-line)
-    const CENTER_BIAS = 0.5; // 50% of viewport height
-    const MARGIN = 12;
-    let centeredTop = targetTop - (scroller.clientHeight * CENTER_BIAS) + MARGIN;
-
-    // Clamp to valid range
-    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    centeredTop = Math.max(0, Math.min(centeredTop, maxScroll));
-
-    // Long jump? Do a spec-safe snap then smooth settle to the centered target
-    const farThreshold = scroller.clientHeight * 3;
-    if (Math.abs(centeredTop - scroller.scrollTop) > farThreshold) {
-      scroller.scrollTo({ top: centeredTop, behavior: "auto" });   // snap (spec-safe)
-      requestAnimationFrame(() => {
-        scroller.scrollTo({ top: centeredTop, behavior: "smooth" });
-      });
-    } else {
-      scroller.scrollTo({ top: centeredTop, behavior: "smooth" });
-    }
-
-    // 4. Suppress scroll-spy until scrolling is stable
-    suppressScrollSpyRef.current?.(2000);
+    // 2. Use CM6 native scrollIntoView (already exposed by the editor handle)
+    cmRef.current?.scrollToOffsetExact(pos, "center");
+    // Briefly pause scroll-spy so it doesn't immediately override the optimistic highlight
+    suppressScrollSpyRef.current?.(600);
   }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup

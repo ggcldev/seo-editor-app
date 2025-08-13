@@ -133,9 +133,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const suppressUntilRef = useRef(0);
   const lastActiveIdRef = useRef<string | null>(null);
 
-  // rAF scroll loop refs
-  const scrollRafRef = useRef<number | null>(null);
-  const lastScrollTsRef = useRef(0);
 
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
@@ -306,29 +303,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     };
     onScrollSpyReadyRef.current?.(suppress);
 
-    // Safety net: rAF loop while the user is actively scrolling
-    const IDLE_MS = 120;
-    const onScroll = () => {
-      lastScrollTsRef.current = performance.now();
-      if (scrollRafRef.current == null) {
-        const tick = () => {
-          if (performance.now() > suppressUntilRef.current) {
-            updateActiveFromViewport(view);
-          }
-          if (performance.now() - lastScrollTsRef.current < IDLE_MS) {
-            scrollRafRef.current = requestAnimationFrame(tick);
-          } else {
-            scrollRafRef.current = null;
-          }
-        };
-        scrollRafRef.current = requestAnimationFrame(tick);
-      }
-    };
-    view.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
-
     return () => {
-      view.scrollDOM.removeEventListener("scroll", onScroll);
-      if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current);
       view.destroy();
       viewRef.current = null;
     };
