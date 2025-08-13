@@ -93,7 +93,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     const scrollSpy = scrollSpyPlugin(
       () => getOutlineRef.current(),
       (id) => onActiveHeadingChangeRef.current(id),
-      "center"
+      "third" // prefer a lower viewport anchor to avoid snapping to the previous heading
     );
     
     const state = EditorState.create({

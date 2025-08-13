@@ -120,14 +120,15 @@ Final deep content.`);
     if (!h) return;
 
     // Suppress scroll-spy longer than the typical smooth scroll to avoid fights
-    suppressScrollSpyRef.current?.(1200);
+    suppressScrollSpyRef.current?.(1400);
 
     const pos = caretAtHeadingEnd(markdown, h);
     cmRef.current?.setSelectionAt(pos);
 
     const view = cmRef.current?.getView();
     if (view) {
-      smoothScrollToCenter(view, h.offset, 24, 0.5);
+      // scroll to a point inside the heading (caret position), with a slightly lower bias
+      smoothScrollToCenter(view, pos, 24, 0.34);
 
       // Optional: end suppression early when scrolling settles
       const sc = view.scrollDOM;
