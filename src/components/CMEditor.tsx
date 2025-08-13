@@ -1,5 +1,5 @@
 import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { EditorState, EditorSelection } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
@@ -9,16 +9,15 @@ import type { Heading } from "../hooks/useOutline";
 
 
 type Props = {
-  markdown: string;                              // current doc text
-  setMarkdown: (v: string) => void;              // propagate changes up
-  onCaretChange: (pos: number) => void;           // selection head
+  markdown: string;
+  setMarkdown: (v: string) => void;
+  onCaretChange: (pos: number) => void;
   narrow: boolean;
   toggleNarrow: () => void;
-  onReady?: (view: EditorView) => void;           // informs parent about the live EditorView
-  // NEW:
+  onReady?: (view: EditorView) => void;
   getOutline: () => Heading[];
   onActiveHeadingChange: (id: string | null) => void;
-  onScrollSpyReady?: (suppress: (ms?: number) => void) => void; // Expose suppress method
+  onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
 };
 
 export type CMHandle = {
@@ -71,37 +70,25 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
-  // Keep latest callbacks in refs so the editor init effect can be [] (init once)
+  // Keep latest callbacks in refs so init effect can be [] (init once)
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
   const onReadyRef = useRef(onReady);
   const getOutlineRef = useRef(getOutline);
   const onActiveHeadingChangeRef = useRef(onActiveHeadingChange);
 
-  useEffect(() => {
-    onChangeRef.current = setMarkdown;
-  }, [setMarkdown]);
-  useEffect(() => {
-    onCaretRef.current = onCaretChange;
-  }, [onCaretChange]);
-  useEffect(() => {
-    onReadyRef.current = onReady;
-  }, [onReady]);
-  useEffect(() => {
-    getOutlineRef.current = getOutline;
-  }, [getOutline]);
-  useEffect(() => {
-    onActiveHeadingChangeRef.current = onActiveHeadingChange;
-  }, [onActiveHeadingChange]);
+  useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
+  useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
+  useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+  useEffect(() => { getOutlineRef.current = getOutline; }, [getOutline]);
+  useEffect(() => { onActiveHeadingChangeRef.current = onActiveHeadingChange; }, [onActiveHeadingChange]);
 
-  // HTML→Markdown paste converter (from your hook)
+  // HTML→Markdown paste (ensure your hook sanitizes!)
   const { htmlToMarkdown } = usePasteToMarkdown();
   const htmlToMdRef = useRef(htmlToMarkdown);
-  useEffect(() => {
-    htmlToMdRef.current = htmlToMarkdown;
-  }, [htmlToMarkdown]);
+  useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
-  // Initialize CodeMirror ONCE (Strict-Mode safe with proper cleanup)
+  // Initialize CodeMirror ONCE (Strict‑Mode safe)
   useEffect(() => {
     const scrollSpy = scrollSpyPlugin(
       () => getOutlineRef.current(),
@@ -117,14 +104,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         mdLang(),
         EditorView.lineWrapping,
         highlightActiveLine(),
-        // Layout/theme to ensure scrolling is enabled and smooth
         EditorView.theme({
           "&": { height: "100%" },
-          ".cm-scroller": {
-            overflow: "auto",
-            height: "100%",
-            WebkitOverflowScrolling: "touch" as any
-          },
+          ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" as any },
           ".cm-content": {
             fontFamily:
               "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
@@ -132,12 +114,10 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             lineHeight: "1.8"
           }
         }),
-        // Sync CM → React
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
         }),
-        // DOM event plumbing: HTML→MD paste only
         EditorView.domEventHandlers({
           paste: (event, view) => {
             const html = (event as ClipboardEvent).clipboardData?.getData("text/html");
@@ -147,12 +127,12 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             const sel = view.state.selection.main;
             view.dispatch({
               changes: { from: sel.from, to: sel.to, insert: md },
-              selection: { anchor: sel.from + md.length }
+              selection: EditorSelection.cursor(sel.from + md.length)
             });
             return true;
           }
         }),
-        // 🔥 Native CM6 scroll-spy
+        // Native CM6 scroll‑spy
         scrollSpy.plugin,
       ]
     });
@@ -164,27 +144,27 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     onReadyRef.current?.(view);
     
     // Expose suppress method to parent
-    if (onScrollSpyReady) {
-      onScrollSpyReady(scrollSpy.suppress);
-    }
+    onScrollSpyReady?.(scrollSpy.suppress);
 
     return () => {
       view.destroy();
-      viewRef.current = null; // important for Strict Mode remounts
+      viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // init once
 
-  // External prop → editor doc sync (preserve selection)
+  // External prop → editor doc sync (preserve full range)
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const cur = view.state.doc.toString();
     if (cur !== markdown) {
       const sel = view.state.selection.main;
+      const a = Math.min(markdown.length, sel.anchor);
+      const h = Math.min(markdown.length, sel.head);
       view.dispatch({
         changes: { from: 0, to: cur.length, insert: markdown },
-        selection: { anchor: Math.min(markdown.length, sel.anchor) }
+        selection: EditorSelection.range(a, h)
       });
     }
   }, [markdown]);
@@ -196,11 +176,11 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
       setSelectionAt(pos: number) {
         const view = viewRef.current;
         if (!view) return;
-        view.dispatch({ selection: { anchor: pos } });
+        view.dispatch({ selection: EditorSelection.cursor(pos) });
         view.focus();
       },
       scrollToOffsetExact(pos: number, bias: "top" | "center" | "third" = "third") {
-        const y = bias === "top" ? "start" : "center"; // 'third' behaves like center in CM
+        const y = bias === "top" ? "start" : "center"; // 'third' ~= 'center' in CM6
         viewRef.current?.dispatch({ effects: EditorView.scrollIntoView(pos, { y }) });
       },
       getView() {
@@ -221,8 +201,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             onClick={toggleNarrow}
             style={STYLES.button}
             aria-label={narrow ? "Switch to full width" : "Switch to narrow width"}
+            aria-pressed={narrow}
           >
-            {narrow ? "Full width" : "Squeeze"}
+            {narrow ? "Full width" : "Narrow width"}
           </button>
 
           <div ref={hostRef} style={STYLES.editorHost} />

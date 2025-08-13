@@ -27,6 +27,8 @@ type OutlinePaneProps = {
   activeHeadingId: string | null;
   onStartResize: () => void;
   onSelectHeading: (id: string) => void;
+  // NEW: for keyboard resizing
+  onBumpWidth: (delta: number) => void;
 };
 
 /** Does heading i have children? */
@@ -98,7 +100,9 @@ const Row = React.memo(function Row({
         if (e.key === 'ArrowLeft' && canFold && !isFolded) { e.preventDefault(); onToggle(); }
         if (e.key === 'ArrowRight' && canFold && isFolded) { e.preventDefault(); onToggle(); }
       }}
-      role="button"
+      role="treeitem"
+      aria-level={h.level}
+      aria-expanded={canFold ? !isFolded : undefined}
       tabIndex={0}
       aria-current={isActive ? 'true' : undefined}
       style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
@@ -118,17 +122,31 @@ const Row = React.memo(function Row({
           </svg>
         </button>
       ) : (
-        <span style={{ width: 28 }} /> // spacer to align with foldBtn width
+        <span style={{ width: 28 }} /> // spacer
       )}
       <OutlineItem item={h} isActive={isActive} />
     </div>
   );
 });
 
-export const OutlinePane = React.memo(function OutlinePane({ outline, activeHeadingId, onStartResize, onSelectHeading }: OutlinePaneProps) {
+export const OutlinePane = React.memo(function OutlinePane({
+  outline, activeHeadingId, onStartResize, onSelectHeading, onBumpWidth
+}: OutlinePaneProps) {
   const scrollRef = useRef<HTMLElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Prune stale collapsed ids when outline changes
+  useEffect(() => {
+    if (collapsed.size === 0) return;
+    const ids = new Set(outline.map(h => h.id));
+    setCollapsed(prev => {
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach(id => { if (ids.has(id)) next.add(id); else changed = true; });
+      return changed ? next : prev;
+    });
+  }, [outline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Which headings have children?
   const hasChild = useMemo(() => {
@@ -192,12 +210,27 @@ export const OutlinePane = React.memo(function OutlinePane({ outline, activeHead
   }, []);
 
   return (
-    <aside ref={scrollRef} className="outline-pane" style={OUTLINE_STYLES.aside}>
+    <aside
+      ref={scrollRef as any}
+      className="outline-pane"
+      style={OUTLINE_STYLES.aside}
+      role="tree"
+      aria-label="Document outline"
+    >
       <div
         className="outline-resizer"
         onMouseDown={(e) => { e.preventDefault(); onStartResize(); }}
+        onTouchStart={(e) => { e.preventDefault(); onStartResize(); }}
         style={OUTLINE_STYLES.resizer}
+        role="separator"
+        aria-orientation="vertical"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') { e.preventDefault(); onBumpWidth(-16); }
+          if (e.key === 'ArrowRight') { e.preventDefault(); onBumpWidth(+16); }
+        }}
         aria-label="Resize outline"
+        title="Drag or use Left/Right arrows to resize"
       />
       <div style={OUTLINE_STYLES.container}>
         <div style={OUTLINE_STYLES.titleRow}>
