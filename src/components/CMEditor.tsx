@@ -7,7 +7,6 @@ import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
 import { scrollSpyPlugin } from "../cmScrollSpy";
 import type { Heading } from "../hooks/useOutline";
 
-
 type Props = {
   markdown: string;
   setMarkdown: (v: string) => void;
@@ -28,20 +27,9 @@ export type CMHandle = {
 
 const STYLES = {
   main: { padding: 0, background: "#f6f6f6", height: "100vh" },
-  container: {
-    height: "100%",
-    padding: 24,
-    boxSizing: "border-box" as const,
-    display: "flex",
-    justifyContent: "center"
-  },
+  container: { height: "100%", padding: 24, boxSizing: "border-box" as const, display: "flex", justifyContent: "center" },
   wrapper: (narrow: boolean) =>
-    ({
-      position: "relative",
-      width: "100%",
-      maxWidth: narrow ? 760 : "100%",
-      overflow: "hidden"
-    } as const),
+    ({ position: "relative", width: "100%", maxWidth: narrow ? 760 : "100%", overflow: "hidden" } as const),
   button: {
     position: "absolute" as const,
     top: 8,
@@ -55,13 +43,23 @@ const STYLES = {
     color: "#374151",
     cursor: "pointer"
   },
-  editorHost: {
-    height: "calc(100vh - 48px)",
-    width: "100%",
-    paddingTop: 32,
-    background: "#f6f6f6"
-  }
+  editorHost: { height: "calc(100vh - 48px)", width: "100%", paddingTop: 32, background: "#f6f6f6" }
 } as const;
+
+// ---- helpers ---------------------------------------------------------------
+
+function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextOffset: number } | null {
+  if (!outline.length) return null;
+  // Find last heading with offset <= pos
+  let idx = -1;
+  for (let i = 0; i < outline.length; i++) {
+    if (outline[i].offset <= pos) idx = i; else break;
+  }
+  if (idx < 0) return null;
+  const h = outline[idx];
+  const nextOffset = outline[idx + 1]?.offset ?? Number.POSITIVE_INFINITY;
+  return { h, nextOffset };
+}
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, onReady, getOutline, onActiveHeadingChange, onScrollSpyReady },
@@ -70,7 +68,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
-  // Keep latest callbacks in refs so init effect can be [] (init once)
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
   const onReadyRef = useRef(onReady);
@@ -83,19 +80,18 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { getOutlineRef.current = getOutline; }, [getOutline]);
   useEffect(() => { onActiveHeadingChangeRef.current = onActiveHeadingChange; }, [onActiveHeadingChange]);
 
-  // HTML→Markdown paste (ensure your hook sanitizes!)
   const { htmlToMarkdown } = usePasteToMarkdown();
   const htmlToMdRef = useRef(htmlToMarkdown);
   useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
-  // Initialize CodeMirror ONCE (Strict‑Mode safe)
   useEffect(() => {
+    // Prefer a lower anchor so spy naturally favors the current section
     const scrollSpy = scrollSpyPlugin(
       () => getOutlineRef.current(),
       (id) => onActiveHeadingChangeRef.current(id),
-      "third" // prefer a lower viewport anchor to avoid snapping to the previous heading
+      "third"
     );
-    
+
     const state = EditorState.create({
       doc: markdown,
       extensions: [
@@ -115,8 +111,26 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           }
         }),
         EditorView.updateListener.of((u) => {
+          // Keep upstream state in sync
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
+
+          // 👇 CARET-WINS rule: if caret is on a heading line, force that heading active.
+          // This prevents the outline highlight from jumping to the previous header while you edit.
+          if (u.selectionSet || u.docChanged) {
+            const pos = u.state.selection.main.head;
+            const outline = getOutlineRef.current();
+            const match = findHeadingForPos(outline, pos);
+            if (match) {
+              const lineAtHeading = u.state.doc.lineAt(match.h.offset);
+              const caretLine = u.state.doc.lineAt(pos);
+              const caretOnHeadingLine = caretLine.from === lineAtHeading.from; // caret is on the heading line itself
+              // Also ensure caret is still within this heading's section range
+              if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
+                onActiveHeadingChangeRef.current(match.h.id);
+              }
+            }
+          }
         }),
         EditorView.domEventHandlers({
           paste: (event, view) => {
@@ -132,7 +146,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             return true;
           }
         }),
-        // Native CM6 scroll‑spy
         scrollSpy.plugin,
       ]
     });
@@ -142,18 +155,13 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     const view = new EditorView({ state, parent });
     viewRef.current = view;
     onReadyRef.current?.(view);
-    
-    // Expose suppress method to parent
     onScrollSpyReady?.(scrollSpy.suppress);
 
-    return () => {
-      view.destroy();
-      viewRef.current = null;
-    };
+    return () => { view.destroy(); viewRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // init once
 
-  // External prop → editor doc sync (preserve full range)
+  // Prop → editor sync (preserve full selection range)
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -169,7 +177,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     }
   }, [markdown]);
 
-  // Expose helpers to parent
   useImperativeHandle(
     ref,
     () => ({
@@ -180,12 +187,10 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         view.focus();
       },
       scrollToOffsetExact(pos: number, bias: "top" | "center" | "third" = "third") {
-        const y = bias === "top" ? "start" : "center"; // 'third' ~= 'center' in CM6
+        const y = bias === "top" ? "start" : "center";
         viewRef.current?.dispatch({ effects: EditorView.scrollIntoView(pos, { y }) });
       },
-      getView() {
-        return viewRef.current;
-      }
+      getView() { return viewRef.current; }
     }),
     []
   );
@@ -205,7 +210,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           >
             {narrow ? "Full width" : "Narrow width"}
           </button>
-
           <div ref={hostRef} style={STYLES.editorHost} />
         </div>
       </div>
