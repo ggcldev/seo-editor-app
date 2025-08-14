@@ -154,20 +154,24 @@ export const OutlinePane = React.memo(function OutlinePane({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const opts = { passive: true } as AddEventListenerOptions;
-    el.addEventListener('wheel', markUserScroll, opts);
-    el.addEventListener('touchstart', markUserScroll, opts);
-    el.addEventListener('scroll', markUserScroll, opts);
+
+    const passiveCaptureFalse: AddEventListenerOptions = { passive: true, capture: false };
+
+    el.addEventListener('wheel', markUserScroll, passiveCaptureFalse);
+    el.addEventListener('touchstart', markUserScroll, passiveCaptureFalse);
+    el.addEventListener('scroll', markUserScroll, passiveCaptureFalse);
+
     const onKey = (e: KeyboardEvent) => {
       // common navigation keys inside the outline
       if (['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '].includes(e.key)) markUserScroll();
     };
-    el.addEventListener('keydown', onKey);
+    el.addEventListener('keydown', onKey, false); // explicit capture:false
+
     return () => {
-      el.removeEventListener('wheel', markUserScroll, opts);
-      el.removeEventListener('touchstart', markUserScroll, opts);
-      el.removeEventListener('scroll', markUserScroll, opts);
-      el.removeEventListener('keydown', onKey);
+      el.removeEventListener('wheel', markUserScroll, false);
+      el.removeEventListener('touchstart', markUserScroll, false);
+      el.removeEventListener('scroll', markUserScroll, false);
+      el.removeEventListener('keydown', onKey, false);
     };
   }, [markUserScroll]);
 
