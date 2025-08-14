@@ -61,7 +61,7 @@ Final deep content.`);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const cmRef = useRef<CMHandle>(null);
-  const [, setCmView] = useState<EditorView | null>(null);
+  const cmViewRef = useRef<EditorView | null>(null);
   const resizeRaf = useRef<number | null>(null);
 
   // Outline now comes from CM6 (single source of truth)
@@ -192,7 +192,7 @@ Final deep content.`);
           toggleNarrow={toggleNarrow}
           highlightOn={highlightOn}
           toggleHighlight={toggleHighlight}
-          onReady={setCmView}
+          onReady={(v) => (cmViewRef.current = v)}
           onOutlineChange={setOutline}
           onActiveHeadingChange={(id) => handleActiveHeadingChange(id)}
           onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
