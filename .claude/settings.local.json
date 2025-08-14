@@ -21,8 +21,10 @@
       "Bash(git checkout:*)",
       "Bash(tsc --noEmit)",
       "Bash(node:*)",
-      "Bash(npm outdated)"
+      "Bash(npm outdated)",
+      "Bash(cp:*)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }

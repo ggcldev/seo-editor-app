@@ -2,7 +2,7 @@
 import { ViewPlugin, ViewUpdate, EditorView } from "@codemirror/view";
 import type { Heading } from "./hooks/useOutline";
 
-type GetOutline = () => Heading[]; // always returns latest outline (from React state)
+type GetOutline = () => Heading[];
 type OnActive = (id: string | null, source: 'scrollspy') => void;
 
 export function scrollSpyPlugin(
@@ -10,127 +10,135 @@ export function scrollSpyPlugin(
   onActive: OnActive,
   bias: "top" | "center" | "third" = "third"
 ) {
+  // Viewport anchor as a fraction of height
   const frac = bias === "top" ? 0 : bias === "center" ? 0.5 : 0.33;
-  
-  let pluginInstance: any = null;
 
-  const plugin = ViewPlugin.define((view: EditorView) => {
-    const instance = new class {
-    private view: EditorView = view;
-    private frame: number | null = null;
-    private resizeObserver: ResizeObserver;
-    private lastActiveId: string | null = null;
-    private lastSwitchAt = 0;
-    private suppressUntil = 0;
-    private lastAnchorPos: number | null = null;
-    private readonly HYSTERESIS_MS = 90;
-    private readonly CALM_BAND_PX = 28;
+  let pluginInstance: {
+    suppress(ms?: number): void;
+  } | null = null;
 
-    constructor() {
-      // run once immediately so we get an initial active heading on mount
-      this.queue();
-      // Use the CM scroller directly — passive + rAF coalescing.
-      this.view.scrollDOM.addEventListener("scroll", this.onScroll, { passive: true });
-      // Resize of the scroller also changes the anchor → same handler
-      this.resizeObserver = new ResizeObserver(() => this.queue());
-      this.resizeObserver.observe(this.view.scrollDOM);
+  const plugin = ViewPlugin.define(view => {
+    let lastActiveId: string | null = null;
+    let lastSwitchAt = 0;
+    let suppressedUntil = 0;
+    let raf = 0;
+    let settleTimer: number | undefined;
+
+    // keep flicker down at boundaries but don't "stick"
+    const HYSTERESIS_MS = 90;
+    // when no native 'scrollend', run a final settle after idle
+    const SETTLE_IDLE_MS = 80;
+    const supportsScrollEnd = "onscrollend" in (view.scrollDOM as any);
+
+    function clamp(n: number, lo: number, hi: number) {
+      return Math.max(lo, Math.min(hi, n));
     }
 
-    update(_u: ViewUpdate) {
-      // If the document or layout changed (typing, wrapping), recompute next frame
-      // (this is cheap: posAtCoords + a binary search on outline array)
-      this.queue();
+    function pickActiveId(): string | null {
+      const outline = getOutline();
+      if (!outline.length) return null;
+
+      try {
+        const rect = view.scrollDOM.getBoundingClientRect();
+        // Stable anchor line in the viewport (64–220 px clamp keeps it sane on small/large panes)
+        const anchorY = rect.top + clamp(rect.height * frac, 64, 220);
+        const coords = { x: rect.left + 12, y: anchorY };
+
+        const res = view.posAtCoords(coords);
+        if (!res) return outline[0].id;
+        const anchorPos = res;
+
+        // headings[] must be sorted by offset (doc position) ascending
+        let lo = 0, hi = outline.length - 1, ans = -1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (outline[mid].offset <= anchorPos) { ans = mid; lo = mid + 1; }
+          else { hi = mid - 1; }
+        }
+        return ans >= 0 ? outline[ans].id : outline[0].id;
+      } catch (e) {
+        // Can't measure during updates, return current or first heading
+        return lastActiveId || (outline[0]?.id ?? null);
+      }
     }
 
-    destroy() {
-      this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
-      this.resizeObserver.disconnect();
-      if (this.frame) cancelAnimationFrame(this.frame);
-    }
-
-    private onScroll = () => this.queue();
-
-    private queue() {
-      if (this.frame != null) return;
-      this.frame = requestAnimationFrame(() => {
-        this.frame = null;
-        this.compute();
-      });
-    }
-
-    private compute() {
+    function applyActive(from: 'live' | 'settle') {
       const now = performance.now();
-      
-      // Skip if we're in suppression window (programmatic scroll)
-      if (now < this.suppressUntil) {
+      if (now < suppressedUntil) {
+        console.log('Scroll spy suppressed, remaining:', suppressedUntil - now);
         return;
       }
 
-      const sc = this.view.scrollDOM;
-      const rect = sc.getBoundingClientRect();
-      // Anchor a bit inside the scroller to avoid seam glitches
-      const y = rect.top + frac * sc.clientHeight + 8;
-      const x = rect.left + 8;
-      const pos = this.view.posAtCoords({ x, y }) ?? 0;
-
-      // Calm band: ignore tiny scroll movements
-      if (this.lastAnchorPos !== null &&
-          Math.abs(pos - this.lastAnchorPos) <= this.CALM_BAND_PX) {
-        return; // ignore tiny movements
-      }
-      this.lastAnchorPos = pos;
-
-      const outline = getOutline();
-      if (!outline.length) { onActive(null, 'scrollspy'); return; }
-
-      // Binary search last heading with offset <= pos
-      let lo = 0, hi = outline.length - 1, ans = -1;
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        if (outline[mid].offset <= pos) { ans = mid; lo = mid + 1; }
-        else hi = mid - 1;
-      }
-      const nextId = ans >= 0 ? outline[ans].id : outline[0].id;
-      
+      const nextId = pickActiveId();
       if (!nextId) return;
-      
-      const cur = this.lastActiveId;
-      
-      // Only switch if enough time has passed since the last change
-      if (nextId !== cur) {
-        // if we're about to change to a different id than the last emitted one,
-        // check the hysteresis window
-        if (this.lastActiveId !== nextId) {
-          if (now - this.lastSwitchAt < this.HYSTERESIS_MS) {
-            return; // chill a bit longer
-          }
-          this.lastSwitchAt = now;
-          this.lastActiveId = nextId;
-        }
+
+      if (nextId !== lastActiveId) {
+        // tiny hysteresis to avoid flicker when the anchor sits exactly on a boundary
+        if (now - lastSwitchAt < HYSTERESIS_MS && from === 'live') return;
+        lastSwitchAt = now;
+        lastActiveId = nextId;
+        console.log('Scroll spy active heading changed to:', nextId);
         onActive(nextId, 'scrollspy');
-      } else {
-        // keep lastId up to date when we're stable
-        this.lastActiveId = cur;
       }
     }
 
-    // Public method for programmatic scroll suppression
-    suppress(ms: number = 900) {
-      this.suppressUntil = performance.now() + ms;
+    const onScroll = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => applyActive('live'));
+
+      // schedule a final settle after momentum stops (if no native scrollend)
+      if (!supportsScrollEnd) {
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = window.setTimeout(() => applyActive('settle'), SETTLE_IDLE_MS);
+      }
+    };
+
+    function onScrollEnd() {
+      // one last precise pick after momentum fully stops
+      applyActive('settle');
     }
-    }();
-    
-    pluginInstance = instance;
+
+    // also respond to viewport/doc structure changes
+    function onUpdate(u: ViewUpdate) {
+      if (u.viewportChanged || u.docChanged) {
+        // Re-evaluate, e.g. headings moved
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => applyActive('live'));
+      }
+    }
+
+    view.scrollDOM.addEventListener('scroll', onScroll, { passive: true });
+    if (supportsScrollEnd) {
+      view.scrollDOM.addEventListener('scrollend', onScrollEnd as any, { passive: true } as any);
+    }
+
+    // initial pick (deferred to avoid measuring during editor construction)
+    setTimeout(() => applyActive('settle'), 0);
+
+    const instance = {
+      suppress(ms = 900) {
+        suppressedUntil = performance.now() + ms;
+        console.log('Scroll spy suppressed for:', ms, 'ms');
+      },
+      update(u: ViewUpdate) { onUpdate(u); },
+      destroy() {
+        view.scrollDOM.removeEventListener('scroll', onScroll);
+        if (supportsScrollEnd) {
+          view.scrollDOM.removeEventListener('scrollend', onScrollEnd as any);
+        }
+        if (raf) cancelAnimationFrame(raf);
+        if (settleTimer) clearTimeout(settleTimer);
+      }
+    };
+
+    (pluginInstance as any) = instance;
     return instance;
   });
 
-  // Return plugin with suppress method
   return {
     plugin,
     suppress: (ms: number = 900) => {
-      if (pluginInstance) {
-        pluginInstance.suppress(ms);
-      }
+      if (pluginInstance) pluginInstance.suppress(ms);
     }
   };
 }

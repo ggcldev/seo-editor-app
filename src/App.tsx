@@ -103,6 +103,10 @@ Final deep content.`);
     const h = outline.find(o => o.offset === offset);
     if (!h) return;
 
+    console.log('Outline click: suppressing scroll spy first');
+    // Suppress BEFORE any navigation to prevent interference
+    suppressScrollSpyRef.current?.(1000);
+
     // Optimistic UI highlight
     handleActiveHeadingChange(h.id);
 
@@ -111,10 +115,10 @@ Final deep content.`);
     // 1. Place the caret exactly at end-of-heading (cursor, not range) and focus
     cmRef.current?.setSelectionAt(pos);
 
-    // 2. Native CM6 scroll — align heading to TOP to avoid "previous header" selection
-    cmRef.current?.scrollToOffsetExact(h.offset, "top");
-    // Give user time to start typing without scroll-spy interference
-    suppressScrollSpyRef.current?.(2500);
+    // 2. Native CM6 scroll — center positioning for better UX
+    cmRef.current?.scrollToOffsetExact(h.offset, "center");
+    
+    console.log('Navigation complete for heading:', h.id);
   }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup

@@ -1,10 +1,11 @@
 import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
-import { EditorState, EditorSelection, Compartment } from "@codemirror/state";
+import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
 import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
 import type { Heading } from "../hooks/useOutline";
+import { scrollSpyPlugin } from "../cmScrollSpy";
 
 type Props = {
   markdown: string;
@@ -22,6 +23,9 @@ type Props = {
   /** Exposes scroll-spy suppression for clean navigation */
   onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
 };
+
+// Tag programmatic selections (e.g., outline clicks) so selection observers can ignore them
+const ProgrammaticSelect = Annotation.define<boolean>();
 
 export type CMHandle = {
   setSelectionAt(pos: number): void;
@@ -130,9 +134,14 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   // data refs
   const outlineRef = useRef<Heading[]>([]);
   const prevDocRef = useRef<string>(markdown);
-  const suppressUntilRef = useRef(0);        // for programmatic jumps
-  const caretLockUntilRef = useRef(0);       // NEW: prefer caret while typing
-  const lastActiveIdRef = useRef<string | null>(null);
+  const scrollSpyRef = useRef<{ suppress: (ms?: number) => void } | null>(null);
+  
+  // Create scroll spy plugin instance once
+  const scrollSpy = useMemo(() => scrollSpyPlugin(
+    () => outlineRef.current,
+    (id, source) => onActiveHeadingChangeRef.current(id, source),
+    "third"
+  ), []);
 
   function headingForPos(pos: number, outline: Heading[]): Heading | null {
     // outline is sorted by offset ascending
@@ -160,37 +169,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const htmlToMdRef = useRef(htmlToMarkdown);
   useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
-  // --- viewport-based active heading ---------------------------------------
-  function updateActiveFromViewport(view: EditorView) {
-    const now = performance.now();
-    if (now <= suppressUntilRef.current) return;    // programmatic jump in progress
-    if (now <= caretLockUntilRef.current) return;   // user is typing: prefer caret
-
-    const sc = view.scrollDOM;
-    const rect = sc.getBoundingClientRect();
-    if (rect.height <= 0) return;
-
-    // Anchor near the top of the viewport to avoid skipping short sections
-    const anchorY = rect.top + 8;
-    const anchorX = rect.left + 8;
-    const at = view.posAtCoords({ x: anchorX, y: anchorY });
-    if (!at) return;
-
-    const match = findHeadingForPos(outlineRef.current, at);
-    const nextId = match?.h.id ?? null;
-    if (nextId !== lastActiveIdRef.current) {
-      lastActiveIdRef.current = nextId;
-      onActiveHeadingChangeRef.current(nextId, "scroll");
-      
-      // Move caret to the detected heading to keep editor and outline in sync
-      if (match) {
-        view.dispatch({ 
-          selection: EditorSelection.cursor(match.h.offset),
-          scrollIntoView: false // Don't scroll, we're already at the right position
-        });
-      }
-    }
-  }
 
   useEffect(() => {
     const state = EditorState.create({
@@ -204,6 +182,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         EditorView.scrollMargins.of(() => ({ top: 72, bottom: 24 })),
         // Active-line goes through a Compartment (ON/OFF)
         activeLineComp.of(highlightOn ? highlightActiveLine() : []),
+        // Scroll spy plugin
+        scrollSpy.plugin,
         EditorView.theme({
           "&": { height: "100%" },
           ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" as any },
@@ -233,19 +213,10 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
 
-          // If user typed or changed selection, lock activity to caret briefly
+          // Temporarily suppress scroll spy during typing to avoid interference
           const isTyping = u.transactions.some(t => t.isUserEvent("input") || t.isUserEvent("delete"));
-          const caretMoved = u.selectionSet;
-          if (isTyping || caretMoved) {
-            const pos = u.state.selection.main.head;
-            const h = headingForPos(pos, outlineRef.current);
-            if (h) {
-              caretLockUntilRef.current = performance.now() + 1200; // ~1.2s feels good
-              if (h.id !== lastActiveIdRef.current) {
-                lastActiveIdRef.current = h.id;
-                onActiveHeadingChangeRef.current(h.id, "caret");
-              }
-            }
+          if (isTyping) {
+            scrollSpyRef.current?.suppress(200); // Brief suppression while typing
           }
 
           // Recompute outline on doc changes (single source of truth)
@@ -286,28 +257,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             }
           }
 
-          // CARET-wins: derive active heading from caret when caret is on a heading line
-          if ((u.selectionSet || u.docChanged) && performance.now() > suppressUntilRef.current) {
-            const pos = u.state.selection.main.head;
-            const match = findHeadingForPos(outlineRef.current, pos);
-            if (match) {
-              const lineAtHeading = u.state.doc.lineAt(match.h.offset);
-              const caretLine = u.state.doc.lineAt(pos);
-              const caretOnHeadingLine = caretLine.from === lineAtHeading.from;
-              if (caretOnHeadingLine && pos >= match.h.offset && pos < match.nextOffset) {
-                lastActiveIdRef.current = match.h.id;
-                onActiveHeadingChangeRef.current(match.h.id, "caret");
-              }
-            } else {
-              lastActiveIdRef.current = null;
-              onActiveHeadingChangeRef.current(null, "caret");
-            }
-          }
-
-          // Viewport-based sync (CM6-visible-range changed due to scroll/resize)
-          if (u.viewportChanged && performance.now() > suppressUntilRef.current) {
-            updateActiveFromViewport(u.view);
-          }
         }),
         EditorView.domEventHandlers({
           paste: (event, view) => {
@@ -334,29 +283,11 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     viewRef.current = view;
     onReadyRef.current?.(view);
 
-    // expose suppression for navigation clicks
-    const suppress = (ms: number = 900) => {
-      suppressUntilRef.current = performance.now() + ms;
-    };
-    onScrollSpyReadyRef.current?.(suppress);
-
-    // Smooth-scroll tracking: call updateActiveFromViewport on every scroll,
-    // but coalesce to one call per animation frame.
-    let ticking = false;
-    const onScroll = () => {
-      const now = performance.now();
-      if (now <= suppressUntilRef.current || now <= caretLockUntilRef.current) return;
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        ticking = false;
-        updateActiveFromViewport(view);
-      });
-    };
-    view.scrollDOM.addEventListener('scroll', onScroll, { passive: true });
+    // Expose scroll spy suppression
+    scrollSpyRef.current = scrollSpy;
+    onScrollSpyReadyRef.current?.(scrollSpy.suppress);
 
     return () => {
-      view.scrollDOM.removeEventListener('scroll', onScroll);
       view.destroy();
       viewRef.current = null;
     };
@@ -422,7 +353,10 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
       setSelectionAt(pos: number) {
         const view = viewRef.current;
         if (!view) return;
-        view.dispatch({ selection: EditorSelection.cursor(pos) });
+        view.dispatch({ 
+          selection: EditorSelection.cursor(pos),
+          annotations: ProgrammaticSelect.of(true)
+        });
         view.focus();
       },
       scrollToOffsetExact(pos: number, bias: "top" | "center" | "third" = "third") {
