@@ -246,12 +246,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
               next = computeOutlineFromDoc(nextDoc);
             }
             const prev = outlineRef.current;
-            const changed =
-              prev.length !== next.length ||
-              (prev.length && next.length &&
-               (prev[prev.length - 1].offset !== next[next.length - 1].offset ||
-                prev[prev.length - 1].id !== next[next.length - 1].id));
-            if (changed) {
+            // updateOutlineIncremental: returns `prev` if nothing moved; new array otherwise.
+            if (prev !== next) {
               outlineRef.current = next;
               onOutlineChangeRef.current(next);
             }
@@ -300,7 +296,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     if (!view) return;
     view.dispatch({
       effects: [
-        activeLineComp.reconfigure(highlightActiveLine()),
+        activeLineComp.reconfigure(highlightOn ? highlightActiveLine() : []),
         themeComp.reconfigure(EditorView.theme({
           ".cm-cursor": { borderLeftWidth: "2px", borderLeftColor: "#374151" },
           ".cm-activeLine": { backgroundColor: highlightOn ? "rgba(55,65,81,0.14)" : "transparent" },
