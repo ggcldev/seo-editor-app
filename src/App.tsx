@@ -113,8 +113,8 @@ Final deep content.`);
 
     // 2. Native CM6 scroll — align heading to TOP to avoid "previous header" selection
     cmRef.current?.scrollToOffsetExact(h.offset, "top");
-    // Give scroll-spy a short pause so it doesn't immediately re-pick based on anchor
-    suppressScrollSpyRef.current?.(900);
+    // Give user time to start typing without scroll-spy interference
+    suppressScrollSpyRef.current?.(2500);
   }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup

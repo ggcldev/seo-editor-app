@@ -130,8 +130,19 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   // data refs
   const outlineRef = useRef<Heading[]>([]);
   const prevDocRef = useRef<string>(markdown);
-  const suppressUntilRef = useRef(0);
+  const suppressUntilRef = useRef(0);        // for programmatic jumps
+  const caretLockUntilRef = useRef(0);       // NEW: prefer caret while typing
   const lastActiveIdRef = useRef<string | null>(null);
+
+  function headingForPos(pos: number, outline: Heading[]): Heading | null {
+    // outline is sorted by offset ascending
+    let lo = 0, hi = outline.length - 1, ans = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (outline[mid].offset <= pos) { ans = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    return ans >= 0 ? outline[ans] : null;
+  }
 
 
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
@@ -151,8 +162,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
 
   // --- viewport-based active heading ---------------------------------------
   function updateActiveFromViewport(view: EditorView) {
-    // ignore while programmatic scroll is running
-    if (performance.now() <= suppressUntilRef.current) return;
+    const now = performance.now();
+    if (now <= suppressUntilRef.current) return;    // programmatic jump in progress
+    if (now <= caretLockUntilRef.current) return;   // user is typing: prefer caret
 
     const sc = view.scrollDOM;
     const rect = sc.getBoundingClientRect();
@@ -220,6 +232,21 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           // Keep upstream state in sync
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
+
+          // If user typed or changed selection, lock activity to caret briefly
+          const isTyping = u.transactions.some(t => t.isUserEvent("input") || t.isUserEvent("delete"));
+          const caretMoved = u.selectionSet;
+          if (isTyping || caretMoved) {
+            const pos = u.state.selection.main.head;
+            const h = headingForPos(pos, outlineRef.current);
+            if (h) {
+              caretLockUntilRef.current = performance.now() + 1200; // ~1.2s feels good
+              if (h.id !== lastActiveIdRef.current) {
+                lastActiveIdRef.current = h.id;
+                onActiveHeadingChangeRef.current(h.id, "caret");
+              }
+            }
+          }
 
           // Recompute outline on doc changes (single source of truth)
           if (u.docChanged) {
@@ -317,7 +344,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     // but coalesce to one call per animation frame.
     let ticking = false;
     const onScroll = () => {
-      if (performance.now() <= suppressUntilRef.current) return;
+      const now = performance.now();
+      if (now <= suppressUntilRef.current || now <= caretLockUntilRef.current) return;
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
