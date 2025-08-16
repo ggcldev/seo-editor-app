@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState, useDeferredValue } from 'react';
+import { useCallback, useEffect, useRef, useState, useDeferredValue, useMemo } from 'react';
 import type { Heading } from './hooks/useOutline';
 import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
 import { EditorView } from '@codemirror/view';
 import { MetricsBar } from './components/MetricsBar';
 import { normalizeEOL } from './eol';
+import { createEventBus } from './core/eventBus';
+import { BusContext } from './core/BusContext';
 import './globals.css';
 
 const OUTLINE_CONFIG = {
@@ -14,6 +16,8 @@ const OUTLINE_CONFIG = {
 };
 
 export default function App() {
+  const bus = useMemo(() => createEventBus(), []);
+  
   const [markdown, _setMarkdown] = useState(`# First Heading
 
 This is some content under the first heading.
@@ -165,16 +169,17 @@ Final deep content.`);
   }, [isResizing]);
 
   return (
-    <div
-      ref={shellRef}
-      className="editor-shell"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `${outlineWidth}px 1fr`,
-        gridTemplateRows: '1fr auto',
-        height: '100vh'
-      }}
-    >
+    <BusContext.Provider value={bus}>
+      <div
+        ref={shellRef}
+        className="editor-shell"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `${outlineWidth}px 1fr`,
+          gridTemplateRows: '1fr auto',
+          height: '100vh'
+        }}
+      >
       <OutlinePane
         outline={deferredOutline}
         activeHeadingId={activeHeadingId}
@@ -202,6 +207,7 @@ Final deep content.`);
           onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
         />
       </div>
-    </div>
+      </div>
+    </BusContext.Provider>
   );
 }

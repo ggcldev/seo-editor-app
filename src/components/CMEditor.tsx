@@ -6,6 +6,8 @@ import { markdown as mdLang } from "@codemirror/lang-markdown";
 import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
 import type { Heading } from "../hooks/useOutline";
 import { scrollSpyPlugin } from "../cmScrollSpy";
+import { useBus } from "../core/BusContext";
+import { ScrollSync } from "../core/scrollSync";
 
 type Props = {
   markdown: string;
@@ -105,8 +107,10 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady, onOutlineChange, onActiveHeadingChange, onScrollSpyReady },
   ref
 ) {
+  const bus = useBus();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const scrollSyncRef = useRef<ScrollSync | null>(null);
 
   // Toggleable compartments
   const activeLineComp = useRef(new Compartment()).current;
@@ -128,9 +132,14 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   // Create scroll spy plugin instance once
   const scrollSpy = useMemo(() => scrollSpyPlugin(
     () => outlineRef.current,
-    (id, source) => onActiveHeadingChangeRef.current(id, source),
+    (id, source) => {
+      onActiveHeadingChangeRef.current(id, source);
+      // Bus event: emit active heading
+      const heading = outlineRef.current.find(h => h.id === id);
+      bus.emit('outline:active', { id, offset: heading?.offset ?? null });
+    },
     "third"
-  ), []);
+  ), [bus]);
 
 
 
@@ -141,9 +150,12 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { onOutlineChangeRef.current = onOutlineChange; }, [onOutlineChange]);
   useEffect(() => { onScrollSpyReadyRef.current = onScrollSpyReady; }, [onScrollSpyReady]);
   useEffect(() => {
-    outlineRef.current = computeOutlineFromDoc(markdown);
-    onOutlineChangeRef.current(outlineRef.current);
-  }, [markdown]);
+    const outline = computeOutlineFromDoc(markdown);
+    outlineRef.current = outline;
+    onOutlineChangeRef.current(outline);
+    // Bus event: emit computed outline
+    bus.emit('outline:computed', { headings: outline, version: Date.now() });
+  }, [markdown, bus]);
 
   const { htmlToMarkdown } = usePasteToMarkdown();
   const htmlToMdRef = useRef(htmlToMarkdown);
@@ -197,6 +209,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           const isTyping = u.transactions.some(t => t.isUserEvent("input") || t.isUserEvent("delete"));
           if (isTyping) {
             scrollSpyRef.current?.suppress(200); // Brief suppression while typing
+            scrollSyncRef.current?.suppress(200); // Also suppress ScrollSync
           }
 
           // Recompute outline on doc changes (single source of truth)
@@ -230,6 +243,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             if (prev !== next) {
               outlineRef.current = next;
               onOutlineChangeRef.current(next);
+              // Bus event: emit updated outline
+              bus.emit('outline:computed', { headings: next, version: Date.now() });
             }
           }
 
@@ -259,16 +274,29 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     viewRef.current = view;
     onReadyRef.current?.(view);
 
-    // Expose scroll spy suppression
+    // Initialize ScrollSync
+    scrollSyncRef.current = new ScrollSync(view);
+
+    // Expose scroll spy suppression (legacy callback + new ScrollSync)
     scrollSpyRef.current = scrollSpy;
     onScrollSpyReadyRef.current?.(scrollSpy.suppress);
 
+    // Listen for navigation events from bus
+    const unsubscribe = bus.on('nav:jump', ({ offset, source }) => {
+      if (source === 'outline') {
+        // Use ScrollSync for target-aware suppression
+        scrollSyncRef.current?.suppressUntilTarget(offset);
+        view.dispatch({ effects: EditorView.scrollIntoView(offset, { y: "center" }) });
+      }
+    });
+
     return () => {
+      unsubscribe();
       view.destroy();
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // init once
+  }, [bus]); // init once + bus
 
   // Reconfigure highlight ON/OFF without rebuilding the editor
   useEffect(() => {

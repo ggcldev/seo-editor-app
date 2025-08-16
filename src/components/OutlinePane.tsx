@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Heading } from '../hooks/useOutline';
 import { OutlineItem } from './OutlineItem';
+import { useBus } from '../core/BusContext';
+import { OutlineIndex } from '../core/outlineCore';
 
 const OUTLINE_STYLES = {
   aside: { borderRight: '1px solid #e5e7eb', background: '#fff', overflowY: 'auto' as const, position: 'relative' as const },
@@ -127,9 +129,13 @@ const Row = React.memo(function Row({
 export const OutlinePane = React.memo(function OutlinePane({
   outline, activeHeadingId, onStartResize, onSelectHeading, onBumpWidth
 }: OutlinePaneProps) {
+  const bus = useBus();
   const scrollRef = useRef<HTMLElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Create OutlineIndex for O(1) lookups
+  const outlineIndex = useMemo(() => new OutlineIndex(outline), [outline]);
 
   // Which headings have children?
   const hasChild = useMemo(() => {
@@ -202,6 +208,33 @@ export const OutlinePane = React.memo(function OutlinePane({
     });
   }, []);
 
+  // Listen for bus events (outline:computed, outline:active)
+  useEffect(() => {
+    const unsubscribeComputed = bus.on('outline:computed', ({ headings }) => {
+      // Bus event received, but we're already getting this via props
+      // Keep both for now during transition
+    });
+
+    const unsubscribeActive = bus.on('outline:active', ({ id }) => {
+      // Bus event received, but we're already getting this via props
+      // Keep both for now during transition
+    });
+
+    return () => {
+      unsubscribeComputed();
+      unsubscribeActive();
+    };
+  }, [bus]);
+
+  // Enhanced onClick handler that emits bus events
+  const handleHeadingClick = useCallback((h: Heading) => {
+    // Legacy prop callback
+    onSelectHeading(h.offset);
+    
+    // Bus event: emit navigation request
+    bus.emit('nav:jump', { offset: h.offset, source: 'outline' });
+  }, [onSelectHeading, bus]);
+
   return (
     <aside
       ref={scrollRef}
@@ -256,8 +289,8 @@ export const OutlinePane = React.memo(function OutlinePane({
                   canFold={canFold}
                   isFolded={isFolded}
                   onToggle={() => toggleFold(h.id)}
-                  // Navigate by precise offset (no id reconciliation)
-                  onClick={() => onSelectHeading(h.offset)}
+                  // Navigate by precise offset + bus events
+                  onClick={() => handleHeadingClick(h)}
                 />
               </div>
             );
