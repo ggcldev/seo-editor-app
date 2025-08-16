@@ -73,9 +73,22 @@ Final deep content.`);
   const deferredOutline = useDeferredValue(outline);
 
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
-  
-  // Scroll-spy suppression for clean navigation
-  const suppressScrollSpyRef = useRef<((ms?: number) => void) | null>(null);
+
+  // Listen to EventBus to update state (replaces deprecated prop callbacks)
+  useEffect(() => {
+    const unsubscribeOutline = bus.on('outline:computed', ({ headings }) => {
+      setOutline(headings);
+    });
+
+    const unsubscribeActive = bus.on('outline:active', ({ id }) => {
+      setActiveHeadingId(id);
+    });
+
+    return () => {
+      unsubscribeOutline();
+      unsubscribeActive();
+    };
+  }, [bus]);
 
   const onStartResize = useCallback(() => {
     setIsResizing(true);
@@ -97,30 +110,6 @@ Final deep content.`);
   }
 
 
-  // CM drives active heading; clicks will set it optimistically too
-  const handleActiveHeadingChange = useCallback((id: string | null) => {
-    setActiveHeadingId(id);
-  }, []);
-
-  /** Jump to a heading by exact offset (bulletproof CM6 native) */
-  const onSelectHeading = useCallback((offset: number) => {
-    const h = outline.find(o => o.offset === offset);
-    if (!h) return;
-
-    // Suppress BEFORE any navigation to prevent interference
-    suppressScrollSpyRef.current?.(1000);
-
-    // Optimistic UI highlight
-    handleActiveHeadingChange(h.id);
-
-    const pos = caretAtHeadingEnd(markdown, h);
-
-    // 1. Place the caret exactly at end-of-heading (cursor, not range) and focus
-    cmRef.current?.setSelectionAt(pos);
-
-    // 2. Native CM6 scroll — center positioning for better UX
-    cmRef.current?.scrollToOffsetExact(h.offset, "center");
-  }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
@@ -181,7 +170,6 @@ Final deep content.`);
         outline={deferredOutline}
         activeHeadingId={activeHeadingId}
         onStartResize={onStartResize}
-        onSelectHeading={onSelectHeading}    // offset only
         onBumpWidth={(d) => {
           setOutlineWidth(prev => Math.min(Math.max(prev + d, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
         }}
@@ -199,9 +187,6 @@ Final deep content.`);
           highlightOn={highlightOn}
           toggleHighlight={toggleHighlight}
           onReady={(v) => (cmViewRef.current = v)}
-          onOutlineChange={setOutline}
-          onActiveHeadingChange={(id) => handleActiveHeadingChange(id)}
-          onScrollSpyReady={(suppress) => { suppressScrollSpyRef.current = suppress; }}
         />
       </div>
       </div>
