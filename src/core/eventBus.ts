@@ -6,6 +6,7 @@ export type AppEvents = {
   'outline:active': { id: string | null; offset: number | null };
   'nav:jump': { offset: number; source: 'outline' | 'search' | 'toc' };
   'scrollspy:state': { flying: boolean; target?: number };
+  'outline:request': {};
 };
 
 export type Unsub = () => void;

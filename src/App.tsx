@@ -18,6 +18,28 @@ const OUTLINE_CONFIG = {
 export default function App() {
   const bus = useMemo(() => createEventBus(), []);
   
+  // Set up EventBus listeners FIRST (before any other state)
+  const [outline, setOutline] = useState<Heading[]>([]);
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribeOutline = bus.on('outline:computed', ({ headings }) => {
+      setOutline(headings);
+    });
+
+    const unsubscribeActive = bus.on('outline:active', ({ id }) => {
+      setActiveHeadingId(id);
+    });
+
+    // Request initial outline emission after listeners are ready
+    bus.emit('outline:request', {});
+
+    return () => {
+      unsubscribeOutline();
+      unsubscribeActive();
+    };
+  }, [bus]);
+  
   const [markdown, _setMarkdown] = useState(`# First Heading
 
 This is some content under the first heading.
@@ -68,27 +90,8 @@ Final deep content.`);
   const cmViewRef = useRef<EditorView | null>(null);
   const resizeRaf = useRef<number | null>(null);
 
-  // Outline now comes from CM6 (single source of truth)
-  const [outline, setOutline] = useState<Heading[]>([]);
+  // Outline now comes from EventBus (single source of truth)
   const deferredOutline = useDeferredValue(outline);
-
-  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
-
-  // Listen to EventBus to update state (replaces deprecated prop callbacks)
-  useEffect(() => {
-    const unsubscribeOutline = bus.on('outline:computed', ({ headings }) => {
-      setOutline(headings);
-    });
-
-    const unsubscribeActive = bus.on('outline:active', ({ id }) => {
-      setActiveHeadingId(id);
-    });
-
-    return () => {
-      unsubscribeOutline();
-      unsubscribeActive();
-    };
-  }, [bus]);
 
   const onStartResize = useCallback(() => {
     setIsResizing(true);
