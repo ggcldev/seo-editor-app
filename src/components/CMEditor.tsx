@@ -9,16 +9,6 @@ import { scrollSpyPlugin } from "../cmScrollSpy";
 import { useBus } from "../core/BusContext";
 import { ScrollSync } from "../core/scrollSync";
 
-// Dev-only helper to warn on deprecated props
-function devWarnDeprecatedProp(name: string, replacement: string) {
-  try {
-    // Only warn in development builds
-    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.warn(`[DEPRECATED] ${name} will be removed in a future release. Use ${replacement} via EventBus instead.`);
-    }
-  } catch {}
-}
 
 type Props = {
   markdown: string;
@@ -29,15 +19,6 @@ type Props = {
   highlightOn: boolean;
   toggleHighlight: () => void;
   onReady?: (view: EditorView) => void;
-  /** @deprecated Use EventBus 'outline:computed' instead */
-  /** Called whenever CM recomputes the outline from the current doc */
-  onOutlineChange?: (outline: Heading[]) => void;
-  /** @deprecated Use EventBus 'outline:active' instead */
-  /** Called when CM detects the active heading (via caret/selection or scroll) */
-  onActiveHeadingChange?: (id: string | null, source?: "caret" | "scroll") => void;
-  /** @deprecated Use EventBus 'nav:jump' and core/scrollSync instead */
-  /** Exposes scroll-spy suppression for clean navigation */
-  onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
 };
 
 // Tag programmatic selections (e.g., outline clicks) so selection observers can ignore them
@@ -118,7 +99,7 @@ function updateOutlineIncremental(
 
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady, onOutlineChange, onActiveHeadingChange, onScrollSpyReady },
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady },
   ref
 ) {
   const bus = useBus();
@@ -126,12 +107,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const viewRef = useRef<EditorView | null>(null);
   const scrollSyncRef = useRef<ScrollSync | null>(null);
 
-  // Warn once in dev if deprecated props are provided
-  useEffect(() => {
-    if (onOutlineChange) devWarnDeprecatedProp('CMEditor.onOutlineChange', "'outline:computed'");
-    if (onActiveHeadingChange) devWarnDeprecatedProp('CMEditor.onActiveHeadingChange', "'outline:active'");
-    if (onScrollSpyReady) devWarnDeprecatedProp('CMEditor.onScrollSpyReady', "'nav:jump' + core/scrollSync");
-  }, [onOutlineChange, onActiveHeadingChange, onScrollSpyReady]);
+  // (Deprecated prop plumbing removed in B3—EventBus is the source of truth)
 
   // Toggleable compartments
   const activeLineComp = useRef(new Compartment()).current;
@@ -141,9 +117,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
   const onReadyRef = useRef(onReady);
-  const onActiveHeadingChangeRef = useRef<((id: string | null, source?: "caret" | "scroll") => void) | undefined>(onActiveHeadingChange);
-  const onOutlineChangeRef = useRef<((outline: Heading[]) => void) | undefined>(onOutlineChange);
-  const onScrollSpyReadyRef = useRef<((suppress: (ms?: number) => void) => void) | undefined>(onScrollSpyReady);
 
   // data refs
   const outlineRef = useRef<Heading[]>([]);
@@ -154,8 +127,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const scrollSpy = useMemo(() => scrollSpyPlugin(
     () => outlineRef.current,
     (id, source) => {
-      onActiveHeadingChangeRef.current?.(id, source);
-      // Bus event: emit active heading
+      // EventBus: emit active heading
       const heading = outlineRef.current.find(h => h.id === id);
       bus.emit('outline:active', { id, offset: heading?.offset ?? null });
     },
@@ -167,14 +139,10 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
-  useEffect(() => { onActiveHeadingChangeRef.current = onActiveHeadingChange; }, [onActiveHeadingChange]);
-  useEffect(() => { onOutlineChangeRef.current = onOutlineChange; }, [onOutlineChange]);
-  useEffect(() => { onScrollSpyReadyRef.current = onScrollSpyReady; }, [onScrollSpyReady]);
   useEffect(() => {
     const outline = computeOutlineFromDoc(markdown);
     outlineRef.current = outline;
-    onOutlineChangeRef.current?.(outline);
-    // Bus event: emit computed outline
+    // EventBus: publish outline snapshot
     bus.emit('outline:computed', { headings: outline, version: Date.now() });
   }, [markdown, bus]);
 
@@ -263,8 +231,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             // updateOutlineIncremental: returns `prev` if nothing moved; new array otherwise.
             if (prev !== next) {
               outlineRef.current = next;
-              onOutlineChangeRef.current?.(next);
-              // Bus event: emit updated outline
+              // EventBus: emit updated outline
               bus.emit('outline:computed', { headings: next, version: Date.now() });
             }
           }
@@ -298,9 +265,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     // Initialize ScrollSync
     scrollSyncRef.current = new ScrollSync(view);
 
-    // Expose scroll spy suppression (legacy callback + new ScrollSync)
+    // Expose scroll spy suppression via EventBus only
     scrollSpyRef.current = scrollSpy;
-    onScrollSpyReadyRef.current?.(scrollSpy.suppress);
 
     // Helper: Caret just after visible heading text (same logic as old App.tsx)
     function caretAtHeadingEnd(doc: string, heading: { offset: number }) {

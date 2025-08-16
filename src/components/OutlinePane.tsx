@@ -4,15 +4,6 @@ import { OutlineItem } from './OutlineItem';
 import { useBus } from '../core/BusContext';
 import { OutlineIndex } from '../core/outlineCore';
 
-// Dev-only helper to warn on deprecated props
-function devWarnDeprecatedProp(name: string, replacement: string) {
-  try {
-    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.warn(`[DEPRECATED] ${name} will be removed in a future release. Use ${replacement} via EventBus instead.`);
-    }
-  } catch {}
-}
 
 const OUTLINE_STYLES = {
   aside: { borderRight: '1px solid #e5e7eb', background: '#fff', overflowY: 'auto' as const, position: 'relative' as const },
@@ -38,8 +29,6 @@ type OutlinePaneProps = {
   outline: Heading[];
   activeHeadingId: string | null;
   onStartResize: () => void;
-  /** @deprecated Use EventBus 'nav:jump' instead */
-  onSelectHeading?: (offset: number) => void;
   onBumpWidth: (delta: number) => void;
 };
 
@@ -138,17 +127,12 @@ const Row = React.memo(function Row({
 });
 
 export const OutlinePane = React.memo(function OutlinePane({
-  outline, activeHeadingId, onStartResize, onSelectHeading, onBumpWidth
+  outline, activeHeadingId, onStartResize, onBumpWidth
 }: OutlinePaneProps) {
   const bus = useBus();
   const scrollRef = useRef<HTMLElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
-  // Warn once in dev if deprecated props are provided
-  useEffect(() => {
-    if (onSelectHeading) devWarnDeprecatedProp('OutlinePane.onSelectHeading', "'nav:jump'");
-  }, [onSelectHeading]);
 
   // Create OutlineIndex for O(1) lookups
   const outlineIndex = useMemo(() => new OutlineIndex(outline), [outline]);
@@ -242,14 +226,11 @@ export const OutlinePane = React.memo(function OutlinePane({
     };
   }, [bus]);
 
-  // Enhanced onClick handler that emits bus events
+  // Click handler that emits bus events only
   const handleHeadingClick = useCallback((h: Heading) => {
-    // Legacy prop callback
-    onSelectHeading?.(h.offset);
-    
-    // Bus event: emit navigation request
+    // EventBus: emit navigation request
     bus.emit('nav:jump', { offset: h.offset, source: 'outline' });
-  }, [onSelectHeading, bus]);
+  }, [bus]);
 
   return (
     <aside
