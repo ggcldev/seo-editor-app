@@ -302,12 +302,57 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     scrollSpyRef.current = scrollSpy;
     onScrollSpyReadyRef.current?.(scrollSpy.suppress);
 
+    // Helper: Caret just after visible heading text (same logic as old App.tsx)
+    function caretAtHeadingEnd(doc: string, heading: { offset: number }) {
+      const nl = doc.indexOf('\n', heading.offset);
+      const lineEnd = nl === -1 ? doc.length : nl;
+      const trimmedLine = doc
+        .slice(heading.offset, lineEnd)
+        .replace(/\s*#+\s*$/, '')
+        .replace(/\s+$/, '');
+      return Math.min(doc.length, heading.offset + trimmedLine.length);
+    }
+
     // Listen for navigation events from bus
     const unsubscribe = bus.on('nav:jump', ({ offset, source }) => {
+      console.log('🔍 DEBUG: nav:jump received', { offset, source });
       if (source === 'outline') {
+        // Find the target heading for this offset
+        const targetHeading = outlineRef.current.find(h => h.offset === offset);
+        console.log('🔍 DEBUG: Target heading', targetHeading);
+        
+        // Immediately emit outline:active for the target heading to update UI
+        if (targetHeading) {
+          bus.emit('outline:active', { id: targetHeading.id, offset: targetHeading.offset });
+          console.log('🔍 DEBUG: Emitted outline:active for', targetHeading.id);
+        }
+        
         // Use ScrollSync for target-aware suppression
+        console.log('🔍 DEBUG: Suppressing scroll-spy for offset', offset);
         scrollSyncRef.current?.suppressUntilTarget(offset);
+        scrollSpyRef.current?.suppress(1000);
+        
+        // Calculate cursor position at end of heading text
+        const doc = view.state.doc.toString();
+        const cursorPos = targetHeading ? caretAtHeadingEnd(doc, targetHeading) : offset;
+        console.log('🔍 DEBUG: Cursor position calculated', { offset, cursorPos });
+        
+        // 1) Put the caret at the end of heading text for editing
+        view.dispatch({ selection: EditorSelection.cursor(cursorPos), scrollIntoView: false });
+        console.log('🔍 DEBUG: Set cursor at end of heading', cursorPos);
+        
+        // 2) Center the heading offset (not cursor position)
         view.dispatch({ effects: EditorView.scrollIntoView(offset, { y: "center" }) });
+        console.log('🔍 DEBUG: Scrolled to center offset', offset);
+        
+        // 3) Focus the editor for immediate editing
+        view.focus();
+        
+        // Optional rAF nudge for layout settle
+        requestAnimationFrame(() => {
+          view.dispatch({ effects: EditorView.scrollIntoView(offset, { y: "center" }) });
+          console.log('🔍 DEBUG: rAF nudge complete for offset', offset);
+        });
       }
     });
 
