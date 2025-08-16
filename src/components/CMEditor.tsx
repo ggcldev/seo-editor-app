@@ -59,7 +59,7 @@ const STYLES = {
 function slugify(s: string): string {
   return s
     .toLowerCase()
-    .replace(/[#`*_\[\](){}/\\<>:"'.,!?~^$|+-]/g, " ")
+    .replace(/[#`*_[\](){}/\\<>:"'.,!?~^$|+-]/g, " ")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
@@ -100,17 +100,6 @@ function updateOutlineIncremental(
   return changed ? next : prev;
 }
 
-function findHeadingForPos(outline: Heading[], pos: number): { h: Heading; nextOffset: number } | null {
-  if (!outline.length) return null;
-  let idx = -1;
-  for (let i = 0; i < outline.length; i++) {
-    if (outline[i].offset <= pos) idx = i; else break;
-  }
-  if (idx < 0) return null;
-  const h = outline[idx];
-  const nextOffset = outline[idx + 1]?.offset ?? Number.POSITIVE_INFINITY;
-  return { h, nextOffset };
-}
 
 export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady, onOutlineChange, onActiveHeadingChange, onScrollSpyReady },
@@ -143,15 +132,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     "third"
   ), []);
 
-  function headingForPos(pos: number, outline: Heading[]): Heading | null {
-    // outline is sorted by offset ascending
-    let lo = 0, hi = outline.length - 1, ans = -1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (outline[mid].offset <= pos) { ans = mid; lo = mid + 1; } else { hi = mid - 1; }
-    }
-    return ans >= 0 ? outline[ans] : null;
-  }
 
 
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
@@ -186,7 +166,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         scrollSpy.plugin,
         EditorView.theme({
           "&": { height: "100%" },
-          ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" as any },
+          ".cm-scroller": { overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" },
           ".cm-content": {
             fontFamily:
               "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",

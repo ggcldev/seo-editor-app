@@ -1,9 +1,9 @@
 // cmScrollSpy.ts
-import { ViewPlugin, ViewUpdate, EditorView } from "@codemirror/view";
+import { ViewPlugin, ViewUpdate } from "@codemirror/view";
 import type { Heading } from "./hooks/useOutline";
 
 type GetOutline = () => Heading[];
-type OnActive = (id: string | null, source: 'scrollspy') => void;
+type OnActive = (id: string | null, source: 'scroll') => void;
 
 export function scrollSpyPlugin(
   getOutline: GetOutline,
@@ -13,9 +13,13 @@ export function scrollSpyPlugin(
   // Viewport anchor as a fraction of height
   const frac = bias === "top" ? 0 : bias === "center" ? 0.5 : 0.33;
 
-  let pluginInstance: {
-    suppress(ms?: number): void;
-  } | null = null;
+  // Public handle we keep to call suppress() from React
+  type SpyInstance = {
+    suppress: (ms?: number) => void;
+  };
+
+  // Make it nullable and well-typed to avoid 'never'
+  let pluginInstance: SpyInstance | null = null;
 
   const plugin = ViewPlugin.define(view => {
     let lastActiveId: string | null = null;
@@ -28,7 +32,7 @@ export function scrollSpyPlugin(
     const HYSTERESIS_MS = 90;
     // when no native 'scrollend', run a final settle after idle
     const SETTLE_IDLE_MS = 80;
-    const supportsScrollEnd = "onscrollend" in (view.scrollDOM as any);
+    const supportsScrollEnd = "onscrollend" in (view.scrollDOM as HTMLElement);
 
     function clamp(n: number, lo: number, hi: number) {
       return Math.max(lo, Math.min(hi, n));
@@ -56,7 +60,7 @@ export function scrollSpyPlugin(
           else { hi = mid - 1; }
         }
         return ans >= 0 ? outline[ans].id : outline[0].id;
-      } catch (e) {
+      } catch {
         // Can't measure during updates, return current or first heading
         return lastActiveId || (outline[0]?.id ?? null);
       }
@@ -78,7 +82,7 @@ export function scrollSpyPlugin(
         lastSwitchAt = now;
         lastActiveId = nextId;
         console.log('Scroll spy active heading changed to:', nextId);
-        onActive(nextId, 'scrollspy');
+        onActive(nextId, 'scroll');
       }
     }
 
@@ -109,7 +113,7 @@ export function scrollSpyPlugin(
 
     view.scrollDOM.addEventListener('scroll', onScroll, { passive: true });
     if (supportsScrollEnd) {
-      view.scrollDOM.addEventListener('scrollend', onScrollEnd as any, { passive: true } as any);
+      view.scrollDOM.addEventListener('scrollend', onScrollEnd as EventListener, { passive: true });
     }
 
     // initial pick (deferred to avoid measuring during editor construction)
@@ -124,21 +128,21 @@ export function scrollSpyPlugin(
       destroy() {
         view.scrollDOM.removeEventListener('scroll', onScroll);
         if (supportsScrollEnd) {
-          view.scrollDOM.removeEventListener('scrollend', onScrollEnd as any);
+          view.scrollDOM.removeEventListener('scrollend', onScrollEnd as EventListener);
         }
         if (raf) cancelAnimationFrame(raf);
         if (settleTimer) clearTimeout(settleTimer);
       }
     };
 
-    (pluginInstance as any) = instance;
+    pluginInstance = instance;
     return instance;
   });
 
   return {
     plugin,
     suppress: (ms: number = 900) => {
-      if (pluginInstance) pluginInstance.suppress(ms);
+      pluginInstance?.suppress(ms);
     }
   };
 }

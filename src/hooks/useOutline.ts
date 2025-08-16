@@ -21,7 +21,6 @@ export function useOutline(markdown: string): Heading[] {
     const len = markdown.length;
 
     let i = 0;
-    let lineStart = 0;
     let inFence: null | { fence: string } = null;
 
     // Precompute line starts for efficient scanning
@@ -36,7 +35,6 @@ export function useOutline(markdown: string): Heading[] {
       // Fence detection: ``` or ~~~ start/end (ignore language)
       const fenceMatch = line.match(/^(\s*)(`{3,}|~{3,})/);
       if (fenceMatch) {
-        const fence = fenceMatch[2][0];
         if (!inFence) {
           inFence = { fence: fenceMatch[2] };
         } else if (line.startsWith(inFence.fence)) {
@@ -44,7 +42,6 @@ export function useOutline(markdown: string): Heading[] {
         }
         // Advance
         i = lineEnd + 1;
-        lineStart = i;
         continue;
       }
 
@@ -66,7 +63,7 @@ export function useOutline(markdown: string): Heading[] {
           // Only detect if current line has non-whitespace
           if (trimmed.length > 0) {
             // lookahead next line
-            let nextStart = lineEnd + 1;
+            const nextStart = lineEnd + 1;
             if (nextStart <= len) {
               let nextEnd = markdown.indexOf("\n", nextStart);
               if (nextEnd === -1) nextEnd = len;
@@ -85,7 +82,6 @@ export function useOutline(markdown: string): Heading[] {
                 });
                 // Skip the underline line
                 i = nextEnd + 1;
-                lineStart = i;
                 continue; // continue outer loop
               }
             }
@@ -95,7 +91,6 @@ export function useOutline(markdown: string): Heading[] {
 
       // Advance to next line
       i = lineEnd + 1;
-      lineStart = i;
     }
 
     return out;

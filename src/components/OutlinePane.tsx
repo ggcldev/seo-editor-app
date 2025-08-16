@@ -204,7 +204,7 @@ export const OutlinePane = React.memo(function OutlinePane({
 
   return (
     <aside
-      ref={scrollRef as any}
+      ref={scrollRef}
       className="outline-pane"
       style={OUTLINE_STYLES.aside}
       role="tree"
