@@ -141,9 +141,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const onChangeRef = useRef(setMarkdown);
   const onCaretRef = useRef(onCaretChange);
   const onReadyRef = useRef(onReady);
-  const onActiveHeadingChangeRef = useRef(onActiveHeadingChange);
-  const onOutlineChangeRef = useRef(onOutlineChange);
-  const onScrollSpyReadyRef = useRef(onScrollSpyReady);
+  const onActiveHeadingChangeRef = useRef<((id: string | null, source?: "caret" | "scroll") => void) | undefined>(onActiveHeadingChange);
+  const onOutlineChangeRef = useRef<((outline: Heading[]) => void) | undefined>(onOutlineChange);
+  const onScrollSpyReadyRef = useRef<((suppress: (ms?: number) => void) => void) | undefined>(onScrollSpyReady);
 
   // data refs
   const outlineRef = useRef<Heading[]>([]);
@@ -154,7 +154,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const scrollSpy = useMemo(() => scrollSpyPlugin(
     () => outlineRef.current,
     (id, source) => {
-      onActiveHeadingChangeRef.current(id, source);
+      onActiveHeadingChangeRef.current?.(id, source);
       // Bus event: emit active heading
       const heading = outlineRef.current.find(h => h.id === id);
       bus.emit('outline:active', { id, offset: heading?.offset ?? null });
@@ -173,7 +173,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => {
     const outline = computeOutlineFromDoc(markdown);
     outlineRef.current = outline;
-    onOutlineChangeRef.current(outline);
+    onOutlineChangeRef.current?.(outline);
     // Bus event: emit computed outline
     bus.emit('outline:computed', { headings: outline, version: Date.now() });
   }, [markdown, bus]);
@@ -263,7 +263,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             // updateOutlineIncremental: returns `prev` if nothing moved; new array otherwise.
             if (prev !== next) {
               outlineRef.current = next;
-              onOutlineChangeRef.current(next);
+              onOutlineChangeRef.current?.(next);
               // Bus event: emit updated outline
               bus.emit('outline:computed', { headings: next, version: Date.now() });
             }
