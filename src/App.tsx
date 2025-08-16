@@ -107,7 +107,6 @@ Final deep content.`);
     const h = outline.find(o => o.offset === offset);
     if (!h) return;
 
-    console.log('Outline click: suppressing scroll spy first');
     // Suppress BEFORE any navigation to prevent interference
     suppressScrollSpyRef.current?.(1000);
 
@@ -121,8 +120,6 @@ Final deep content.`);
 
     // 2. Native CM6 scroll — center positioning for better UX
     cmRef.current?.scrollToOffsetExact(h.offset, "center");
-    
-    console.log('Navigation complete for heading:', h.id);
   }, [outline, markdown, handleActiveHeadingChange]);
 
   // Cleanup
