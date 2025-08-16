@@ -9,6 +9,17 @@ import { scrollSpyPlugin } from "../cmScrollSpy";
 import { useBus } from "../core/BusContext";
 import { ScrollSync } from "../core/scrollSync";
 
+// Dev-only helper to warn on deprecated props
+function devWarnDeprecatedProp(name: string, replacement: string) {
+  try {
+    // Only warn in development builds
+    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn(`[DEPRECATED] ${name} will be removed in a future release. Use ${replacement} via EventBus instead.`);
+    }
+  } catch {}
+}
+
 type Props = {
   markdown: string;
   setMarkdown: (v: string) => void;
@@ -18,10 +29,13 @@ type Props = {
   highlightOn: boolean;
   toggleHighlight: () => void;
   onReady?: (view: EditorView) => void;
+  /** @deprecated Use EventBus 'outline:computed' instead */
   /** Called whenever CM recomputes the outline from the current doc */
-  onOutlineChange: (outline: Heading[]) => void;
+  onOutlineChange?: (outline: Heading[]) => void;
+  /** @deprecated Use EventBus 'outline:active' instead */
   /** Called when CM detects the active heading (via caret/selection or scroll) */
-  onActiveHeadingChange: (id: string | null, source?: "caret" | "scroll") => void;
+  onActiveHeadingChange?: (id: string | null, source?: "caret" | "scroll") => void;
+  /** @deprecated Use EventBus 'nav:jump' and core/scrollSync instead */
   /** Exposes scroll-spy suppression for clean navigation */
   onScrollSpyReady?: (suppress: (ms?: number) => void) => void;
 };
@@ -111,6 +125,13 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const scrollSyncRef = useRef<ScrollSync | null>(null);
+
+  // Warn once in dev if deprecated props are provided
+  useEffect(() => {
+    if (onOutlineChange) devWarnDeprecatedProp('CMEditor.onOutlineChange', "'outline:computed'");
+    if (onActiveHeadingChange) devWarnDeprecatedProp('CMEditor.onActiveHeadingChange', "'outline:active'");
+    if (onScrollSpyReady) devWarnDeprecatedProp('CMEditor.onScrollSpyReady', "'nav:jump' + core/scrollSync");
+  }, [onOutlineChange, onActiveHeadingChange, onScrollSpyReady]);
 
   // Toggleable compartments
   const activeLineComp = useRef(new Compartment()).current;
