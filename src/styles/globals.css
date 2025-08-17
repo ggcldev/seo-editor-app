@@ -51,3 +51,36 @@
   width: 0;
   height: 0;
 }
+
+/* VirtualList CSS */
+.outline-scroll { 
+  contain: content; 
+  overflow-anchor: none;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain; /* avoid scroll chaining to page */
+  /* Override parent scrollbar hiding for virtual lists */
+  scrollbar-width: auto !important;
+  -ms-overflow-style: auto !important;
+}
+
+.outline-scroll::-webkit-scrollbar {
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Fix flexbox container for proper scrolling */
+.outline-pane { 
+  min-height: 0; 
+  min-width: 0; 
+}
+
+.outline-row { 
+  font-size: 13px; 
+}
+
+@media (prefers-reduced-motion: reduce) { 
+  .outline-scroll { 
+    scroll-behavior: auto; 
+  } 
+}

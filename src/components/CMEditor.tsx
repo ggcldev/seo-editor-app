@@ -127,9 +127,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const scrollSpy = useMemo(() => scrollSpyPlugin(
     () => outlineRef.current,
     (id, source) => {
-      // EventBus: emit active heading
+      // EventBus: emit active heading with source
       const heading = outlineRef.current.find(h => h.id === id);
-      bus.emit('outline:active', { id, offset: heading?.offset ?? null });
+      bus.emit('outline:active', { id, offset: heading?.offset ?? null, source: source ?? 'scroll' });
     },
     "third"
   ), [bus]);
@@ -295,7 +295,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         
         // Immediately emit outline:active for the target heading to update UI
         if (targetHeading) {
-          bus.emit('outline:active', { id: targetHeading.id, offset: targetHeading.offset });
+          bus.emit('outline:active', { id: targetHeading.id, offset: targetHeading.offset, source: 'outline' });
         }
         
         // Use ScrollSync for target-aware suppression
