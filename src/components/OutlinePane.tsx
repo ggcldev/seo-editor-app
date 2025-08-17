@@ -7,7 +7,7 @@ import { VirtualList, VirtualListHandle } from './VirtualList';
 
 const ROW_H = 32; // good tap target
 const INDENT_PX = 12; // px per heading level
-const VIRTUAL_THRESHOLD = 5; // temporarily low for testing virtualization
+const VIRTUAL_THRESHOLD = 250; // turn on virtualization only for big docs
 
 
 const OUTLINE_STYLES = {
