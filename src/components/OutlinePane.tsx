@@ -7,7 +7,7 @@ import { VirtualList, VirtualListHandle } from './VirtualList';
 
 const ROW_H = 32; // good tap target
 const INDENT_PX = 12; // px per heading level
-const VIRTUAL_THRESHOLD = 5; // temporarily low to test virtualization
+const VIRTUAL_THRESHOLD = 5; // temporarily low for testing virtualization
 
 
 const OUTLINE_STYLES = {
@@ -173,9 +173,10 @@ export const OutlinePane = React.memo(function OutlinePane({
     const off = bus.on('outline:active', ({ id, source }) => {
       const i = id ? (idToIdx.get(id) ?? 0) : 0;
       setFocusIdx(i);
-      // Soft follow for scroll; full ensure for keyboard/click
-      const bandRows = source === 'scroll' ? 3 : 0; // 0 = nearest behavior
+      // Only call ensureVisible for virtual mode
       if (useVirtual) {
+        // Soft follow for scroll; full ensure for keyboard/click
+        const bandRows = source === 'scroll' ? 3 : 0; // 0 = nearest behavior
         listRef.current?.ensureVisible(i, { bandRows });
       }
     });
@@ -264,7 +265,7 @@ export const OutlinePane = React.memo(function OutlinePane({
         e.preventDefault(); 
         setFocusIdx(v => { 
           const n = Math.min(v + 1, visible.length - 1); 
-          if (useVirtual) listRef.current?.ensureVisible(n); 
+          listRef.current?.ensureVisible(n, { bandRows: 0 }); 
           return n; 
         }); 
         break;
@@ -272,7 +273,7 @@ export const OutlinePane = React.memo(function OutlinePane({
         e.preventDefault(); 
         setFocusIdx(v => { 
           const n = Math.max(v - 1, 0); 
-          if (useVirtual) listRef.current?.ensureVisible(n); 
+          listRef.current?.ensureVisible(n, { bandRows: 0 }); 
           return n; 
         }); 
         break;
@@ -281,7 +282,7 @@ export const OutlinePane = React.memo(function OutlinePane({
         setFocusIdx(v => { 
           const step = Math.max(1, Math.floor(8)); 
           const n = Math.min(v + step, visible.length - 1); 
-          if (useVirtual) listRef.current?.ensureVisible(n); 
+          listRef.current?.ensureVisible(n, { bandRows: 0 }); 
           return n; 
         }); 
         break;
@@ -290,19 +291,19 @@ export const OutlinePane = React.memo(function OutlinePane({
         setFocusIdx(v => { 
           const step = Math.max(1, Math.floor(8)); 
           const n = Math.max(v - step, 0); 
-          if (useVirtual) listRef.current?.ensureVisible(n); 
+          listRef.current?.ensureVisible(n, { bandRows: 0 }); 
           return n; 
         }); 
         break;
       case "Home":      
         e.preventDefault(); 
         setFocusIdx(0); 
-        if (useVirtual) listRef.current?.ensureVisible(0); 
+        listRef.current?.ensureVisible(0, { bandRows: 0 }); 
         break;
       case "End":       
         e.preventDefault(); 
         setFocusIdx(visible.length - 1); 
-        if (useVirtual) listRef.current?.ensureVisible(visible.length - 1); 
+        listRef.current?.ensureVisible(visible.length - 1, { bandRows: 0 }); 
         break;
       case "Enter":
       case " ":         
