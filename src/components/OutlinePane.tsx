@@ -7,7 +7,7 @@ import { VirtualList, VirtualListHandle } from './VirtualList';
 
 const ROW_H = 32; // good tap target
 const INDENT_PX = 12; // px per heading level
-const THRESHOLD = 50; // reasonable threshold for testing
+const VIRTUAL_THRESHOLD = 5; // temporarily low to test virtualization
 
 
 const OUTLINE_STYLES = {
@@ -154,7 +154,7 @@ export const OutlinePane = React.memo(function OutlinePane({
   }, [outline]);
 
   const visible = useMemo(() => computeVisible(outline, collapsed), [outline, collapsed]);
-  const useVirtual = visible.length >= THRESHOLD;
+  const useVirtual = visible.length >= VIRTUAL_THRESHOLD;
   
   const idToIdx = useMemo(() => {
     const m = new Map<string, number>();
@@ -168,14 +168,19 @@ export const OutlinePane = React.memo(function OutlinePane({
     return nearestCollapsedAncestorId(outline, activeHeadingId, collapsed) ?? activeHeadingId;
   }, [outline, activeHeadingId, collapsed]);
 
-  // Keep focus near the active heading
+  // Soft follow for active heading changes
   useEffect(() => {
-    const i = activeHeadingId ? idToIdx.get(activeHeadingId) ?? 0 : 0;
-    setFocusIdx(i);
-    if (useVirtual) {
-      listRef.current?.ensureVisible(i);
-    }
-  }, [activeHeadingId, idToIdx, useVirtual]);
+    const off = bus.on('outline:active', ({ id, source }) => {
+      const i = id ? (idToIdx.get(id) ?? 0) : 0;
+      setFocusIdx(i);
+      // Soft follow for scroll; full ensure for keyboard/click
+      const bandRows = source === 'scroll' ? 3 : 0; // 0 = nearest behavior
+      if (useVirtual) {
+        listRef.current?.ensureVisible(i, { bandRows });
+      }
+    });
+    return off;
+  }, [bus, idToIdx, useVirtual]);
   
   // Polite auto-scroll for non-virtual mode
   const userScrollUntil = useRef(0);
@@ -360,9 +365,10 @@ export const OutlinePane = React.memo(function OutlinePane({
             ref={listRef}
             count={visible.length}
             rowHeight={ROW_H}
-            overscan={24}
+            overscan={24}                           // base overscan
+            // adaptiveOverscan={{ base: 24, max: 48, factor: 20 }} // temporarily disabled
             className="outline-scroll"
-            style={{ flex: 1, minHeight: 0 }}
+            style={{ height: "100%" }}
           >
             {(i, itemStyle) => {
               const h = visible[i];

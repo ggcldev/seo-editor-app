@@ -1,83 +1,95 @@
 import React, {
-  CSSProperties, ReactNode, forwardRef, useEffect, useImperativeHandle,
-  useMemo, useRef, useState
+  CSSProperties, ReactNode, forwardRef, useImperativeHandle,
+  useLayoutEffect, useMemo, useRef, useState
 } from "react";
 
-export type VirtualListHandle = { ensureVisible: (index: number) => void };
+export type VirtualListHandle = {
+  // Ensure index is visible; only move if outside a comfort band (rows)
+  ensureVisible: (index: number, opts?: { bandRows?: number }) => void;
+};
 
 type Props = {
   count: number;
-  rowHeight: number;           // fixed row height (px)
-  overscan?: number;           // extra rows above/below
+  rowHeight: number;
+  overscan?: number;
   className?: string;
   style?: CSSProperties;
-  children: (index: number, itemStyle: CSSProperties) => ReactNode; // render global index
+  children: (index: number, itemStyle: CSSProperties) => ReactNode;
 };
 
 export const VirtualList = forwardRef<VirtualListHandle, Props>(function VirtualList(
   { count, rowHeight, overscan = 24, className, style, children }, ref
 ) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [vh, setVh] = useState(0);
   const raf = useRef<number | null>(null);
 
-  // rAF-throttled scroll listener + resize observer
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    
+  // StrictMode-safe: attach when node is real
+  useLayoutEffect(() => {
+    if (!node) return;
+    const el = node;
+
     const onScroll = () => {
       if (raf.current != null) return;
-      raf.current = requestAnimationFrame(() => { 
-        raf.current = null; 
-        setScrollTop(el.scrollTop); 
+      raf.current = requestAnimationFrame(() => {
+        raf.current = null;
+        setScrollTop(el.scrollTop);
       });
     };
-    
-    const measure = () => setVh(el.clientHeight);
-    measure(); // initial
-    
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    el.addEventListener("scroll", onScroll, { passive: true });
-    
-    return () => { 
-      el.removeEventListener("scroll", onScroll); 
-      ro.disconnect(); 
-      if (raf.current) cancelAnimationFrame(raf.current); 
-    };
-  }, []);
 
-  // window math
-  const rowsInView = vh ? Math.ceil(vh / rowHeight) : 0;
+    const ro = new ResizeObserver(() => setVh(el.clientHeight));
+    ro.observe(el);
+    setVh(el.clientHeight); // initial
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+      if (raf.current) cancelAnimationFrame(raf.current);
+    };
+  }, [node]);
+
+  const rowsInView = vh ? Math.max(1, Math.ceil(vh / rowHeight)) : 1;
   const start = Math.max(0, Math.min(count, Math.floor(scrollTop / rowHeight) - overscan));
   const end   = Math.max(0, Math.min(count, start + rowsInView + overscan * 2));
   const offY  = start * rowHeight;
   const total = count * rowHeight;
 
-  // public: ensure a row is visible (geometry-based to avoid drift)
   useImperativeHandle(ref, () => ({
-    ensureVisible: (i: number) => {
-      const el = scrollRef.current;
-      if (!el) return;
-      
-      const top = i * rowHeight, bottom = top + rowHeight;
-      const vTop = el.scrollTop, vBot = vTop + el.clientHeight;
-      if (top < vTop) {
-        el.scrollTop = Math.max(0, top - overscan * rowHeight);
-      } else if (bottom > vBot) {
-        el.scrollTop = bottom - el.clientHeight + overscan * rowHeight;
+    ensureVisible: (i: number, opts?: { bandRows?: number }) => {
+      const el = node; if (!el) return;
+      const band = Math.max(0, (opts?.bandRows ?? 2)) * rowHeight;
+      const rowTop = i * rowHeight;
+      const rowBot = rowTop + rowHeight;
+      const vTop   = el.scrollTop + band;
+      const vBot   = el.scrollTop + el.clientHeight - band;
+      if (rowTop < vTop) {
+        el.scrollTop = rowTop - band;     // nudge up just enough
+      } else if (rowBot > vBot) {
+        el.scrollTop = rowBot - el.clientHeight + band; // nudge down just enough
       }
     }
-  }), [rowHeight, overscan]);
+  }), [node, rowHeight]);
 
-  const slice = useMemo(() => Array.from({ length: Math.max(0, end - start) }, (_, k) => start + k), [start, end]);
+  const slice = useMemo(
+    () => Array.from({ length: Math.max(0, end - start) }, (_, k) => start + k),
+    [start, end]
+  );
+
+  // Debug logging
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[VL]', { scrollTop, vh, start, end, total, count });
+  }
 
   return (
-    <div ref={scrollRef} className={className} style={{ overflow: "auto", contain: "content", overflowAnchor: "none", ...style }}>
+    <div
+      ref={setNode}
+      className={className}
+      style={{ overflow: "auto", height: "100%", contain: "content", overflowAnchor: "none", ...style }}
+    >
       <div style={{ height: total, position: "relative" }}>
-        <div style={{ position: "absolute", inset: "0 0 auto 0", transform: `translateY(${offY}px)` }}>
+        <div style={{ position: "absolute", inset: "0 0 auto 0", transform: `translateY(${offY}px)`, willChange: "transform" }}>
           {slice.map(i => children(i, { height: rowHeight, lineHeight: `${rowHeight}px` }))}
         </div>
       </div>
