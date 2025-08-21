@@ -102,15 +102,15 @@ Final deep content.`);
   const toggleHighlight = useCallback(() => setHighlightOn(v => !v), []);
 
   // Caret just after visible heading text
-  function caretAtHeadingEnd(md: string, h: { offset: number }) {
-    const nl = md.indexOf('\n', h.offset);
-    const lineEnd = nl === -1 ? md.length : nl;
-    const trimmedLine = md
-      .slice(h.offset, lineEnd)
-      .replace(/\s*#+\s*$/, '')
-      .replace(/\s+$/, '');
-    return Math.min(md.length, h.offset + trimmedLine.length);
-  }
+  // function caretAtHeadingEnd(md: string, h: { offset: number }) {
+  //   const nl = md.indexOf('\n', h.offset);
+  //   const lineEnd = nl === -1 ? md.length : nl;
+  //   const trimmedLine = md
+  //     .slice(h.offset, lineEnd)
+  //     .replace(/\s*#+\s*$/, '')
+  //     .replace(/\s+$/, '');
+  //   return Math.min(md.length, h.offset + trimmedLine.length);
+  // }
 
 
 

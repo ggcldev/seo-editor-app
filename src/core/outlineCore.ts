@@ -23,7 +23,11 @@ export class OutlineIndex {
     let lo = 0, hi = this.offsets.length - 1;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      this.offsets[mid] < offset ? (lo = mid + 1) : (hi = mid);
+      if (this.offsets[mid] < offset) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
     }
     return lo;
   }
