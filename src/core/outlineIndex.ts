@@ -1,8 +1,10 @@
 // src/core/outlineIndex.ts
 export class OutlineIndex {
   private offsets: number[]; // sorted heading positions (pos/offset)
+  private headings: { id: string; pos: number }[];
   
-  constructor(private headings: { id: string; pos: number }[]) {
+  constructor(headings: { id: string; pos: number }[]) {
+    this.headings = headings;
     this.offsets = headings.map(h => h.pos);
   }
 

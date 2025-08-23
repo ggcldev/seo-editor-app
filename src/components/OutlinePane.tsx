@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Heading } from '../hooks/useOutline';
 import { OutlineItem } from './OutlineItem';
 import { useBus } from '../core/BusContext';
-import { OutlineIndex } from '../core/outlineCore';
-import { VirtualList, VirtualListHandle } from './VirtualList';
+import { VirtualList, type VirtualListHandle } from './VirtualList';
 
 const ROW_H = 32; // good tap target
 const INDENT_PX = 12; // px per heading level
@@ -31,8 +30,6 @@ const OUTLINE_STYLES = {
 } as const;
 
 type OutlinePaneProps = {
-  outline: Heading[];
-  activeHeadingId: string | null;
   onStartResize: () => void;
   onBumpWidth: (delta: number) => void;
 };
@@ -87,64 +84,30 @@ function nearestCollapsedAncestorId(outline: Heading[], activeId: string, collap
   return null;
 }
 
-const Row = React.memo(function Row({
-  h, isActive, canFold, isFolded, onToggle, onClick
-}: {
-  h: Heading; isActive: boolean; canFold: boolean; isFolded: boolean;
-  onToggle: () => void; onClick: () => void;
-}) {
-  const label = isFolded ? 'Expand section' : 'Collapse section';
-  return (
-    <div
-      onClick={(e) => { e.preventDefault(); onClick(); }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
-        if (e.key === 'ArrowLeft' && canFold && !isFolded) { e.preventDefault(); onToggle(); }
-        if (e.key === 'ArrowRight' && canFold && isFolded) { e.preventDefault(); onToggle(); }
-      }}
-      role="treeitem"
-      aria-level={h.level}
-      aria-expanded={canFold ? !isFolded : undefined}
-      tabIndex={0}
-      aria-current={isActive ? 'true' : undefined}
-      style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-      title={h.text}
-    >
-      {canFold ? (
-        <button
-          type="button"
-          aria-label={label}
-          aria-expanded={!isFolded}
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          style={OUTLINE_STYLES.foldBtn}
-          title={label}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" style={{ transform: isFolded ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.12s ease' }} aria-hidden="true">
-            <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-      ) : (
-        <span style={{ width: 28 }} />
-      )}
-      <OutlineItem item={h} isActive={isActive} />
-    </div>
-  );
-});
 
 export const OutlinePane = React.memo(function OutlinePane({
-  outline, activeHeadingId, onStartResize, onBumpWidth
+  onStartResize, onBumpWidth
 }: OutlinePaneProps) {
   const bus = useBus();
   const scrollRef = useRef<HTMLElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   
+  // EventBus state
+  const [outline, setOutline] = useState<Heading[]>([]);
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const off1 = bus.on("outline:computed", ({ headings }) => setOutline(headings));
+    const off2 = bus.on("outline:active", ({ id }) => setActiveHeadingId(id));
+    bus.emit("outline:request", {});
+    return () => { off1(); off2(); };
+  }, [bus]);
+  
   // Virtualization
   const listRef = useRef<VirtualListHandle>(null);
   const [focusIdx, setFocusIdx] = useState(0);
 
-  // Create OutlineIndex for O(1) lookups
-  const outlineIndex = useMemo(() => new OutlineIndex(outline), [outline]);
 
   // Which headings have children?
   const hasChild = useMemo(() => {
@@ -240,26 +203,9 @@ export const OutlinePane = React.memo(function OutlinePane({
     });
   }, []);
 
-  // Listen for bus events (outline:computed, outline:active)
-  useEffect(() => {
-    const unsubscribeComputed = bus.on('outline:computed', ({ headings }) => {
-      // Bus event received, but we're already getting this via props
-      // Keep both for now during transition
-    });
-
-    const unsubscribeActive = bus.on('outline:active', ({ id }) => {
-      // Bus event received, but we're already getting this via props
-      // Keep both for now during transition
-    });
-
-    return () => {
-      unsubscribeComputed();
-      unsubscribeActive();
-    };
-  }, [bus]);
 
   // Keyboard navigation
-  const onRowKeyDown = useCallback((e: React.KeyboardEvent, i: number, h: Heading, canFold: boolean, isFolded: boolean) => {
+  const onRowKeyDown = useCallback((e: React.KeyboardEvent, _i: number, h: Heading, canFold: boolean, isFolded: boolean) => {
     switch (e.key) {
       case "ArrowDown": 
         e.preventDefault(); 

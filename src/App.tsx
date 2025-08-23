@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useRef, useState, useDeferredValue, useMemo } from 'react';
-import type { Heading } from './hooks/useOutline';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { OutlinePane } from './components/OutlinePane';
 import { CMEditor, type CMHandle } from './components/CMEditor';
-import { EditorView } from '@codemirror/view';
 import { MetricsBar } from './components/MetricsBar';
 import { normalizeEOL } from './eol';
-import { createEventBus } from './core/eventBus';
-import { BusContext } from './core/BusContext';
+import { BusProvider } from './core/BusContext';
 import './globals.css';
 
 const OUTLINE_CONFIG = {
@@ -16,29 +13,6 @@ const OUTLINE_CONFIG = {
 };
 
 export default function App() {
-  const bus = useMemo(() => createEventBus(), []);
-  
-  // Set up EventBus listeners FIRST (before any other state)
-  const [outline, setOutline] = useState<Heading[]>([]);
-  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const unsubscribeOutline = bus.on('outline:computed', ({ headings }) => {
-      setOutline(headings);
-    });
-
-    const unsubscribeActive = bus.on('outline:active', ({ id }) => {
-      setActiveHeadingId(id);
-    });
-
-    // Request initial outline emission after listeners are ready
-    bus.emit('outline:request', {});
-
-    return () => {
-      unsubscribeOutline();
-      unsubscribeActive();
-    };
-  }, [bus]);
   
   const [markdown, _setMarkdown] = useState(`# First Heading
 
@@ -87,11 +61,8 @@ Final deep content.`);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const cmRef = useRef<CMHandle>(null);
-  const cmViewRef = useRef<EditorView | null>(null);
   const resizeRaf = useRef<number | null>(null);
 
-  // Outline now comes from EventBus (single source of truth)
-  const deferredOutline = useDeferredValue(outline);
 
   const onStartResize = useCallback(() => {
     setIsResizing(true);
@@ -101,23 +72,8 @@ Final deep content.`);
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
   const toggleHighlight = useCallback(() => setHighlightOn(v => !v), []);
 
-  // Caret just after visible heading text
-  // function caretAtHeadingEnd(md: string, h: { offset: number }) {
-  //   const nl = md.indexOf('\n', h.offset);
-  //   const lineEnd = nl === -1 ? md.length : nl;
-  //   const trimmedLine = md
-  //     .slice(h.offset, lineEnd)
-  //     .replace(/\s*#+\s*$/, '')
-  //     .replace(/\s+$/, '');
-  //   return Math.min(md.length, h.offset + trimmedLine.length);
-  // }
-
-
-
   // Cleanup
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
-
-  // No user scroll bookkeeping needed anymore
 
   // Mouse + touch resize (kept from your earlier version)
   useEffect(() => {
@@ -158,7 +114,7 @@ Final deep content.`);
   }, [isResizing]);
 
   return (
-    <BusContext.Provider value={bus}>
+    <BusProvider>
       <div
         ref={shellRef}
         className="editor-shell"
@@ -170,8 +126,6 @@ Final deep content.`);
         }}
       >
       <OutlinePane
-        outline={deferredOutline}
-        activeHeadingId={activeHeadingId}
         onStartResize={onStartResize}
         onBumpWidth={(d) => {
           setOutlineWidth(prev => Math.min(Math.max(prev + d, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
@@ -189,10 +143,10 @@ Final deep content.`);
           toggleNarrow={toggleNarrow}
           highlightOn={highlightOn}
           toggleHighlight={toggleHighlight}
-          onReady={(v) => (cmViewRef.current = v)}
+          onReady={() => {}}
         />
       </div>
       </div>
-    </BusContext.Provider>
+    </BusProvider>
   );
 }

@@ -1,5 +1,5 @@
-import React, {
-  CSSProperties, ReactNode, forwardRef, useImperativeHandle,
+import {
+  type CSSProperties, type ReactNode, forwardRef, useImperativeHandle,
   useLayoutEffect, useMemo, useRef, useState
 } from "react";
 
