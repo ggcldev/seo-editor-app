@@ -34,7 +34,14 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
       <span style={{ color: `rgba(37, 99, 235, ${accentOpacity})`, fontSize: 11, fontWeight: 700 }}>
         H{item.level}
       </span>
-      <span style={{ fontWeight: 500, whiteSpace: 'normal', wordBreak: 'break-word' }}>{item.text}</span>
+      <span style={{ 
+        fontWeight: 500, 
+        whiteSpace: 'nowrap', 
+        overflow: 'hidden', 
+        textOverflow: 'ellipsis',
+        flex: '1 1 auto',
+        minWidth: 0
+      }}>{item.text}</span>
     </div>
   );
 }

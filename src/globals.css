@@ -51,3 +51,10 @@
   width: 0;
   height: 0;
 }
+
+/* Disable selection during drag-resize */
+.noselect {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
