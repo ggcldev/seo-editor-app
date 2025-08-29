@@ -69,7 +69,6 @@ export function scrollSpyPlugin(
     function applyActive(from: 'live' | 'settle') {
       const now = performance.now();
       if (now < suppressedUntil) {
-        console.log('Scroll spy suppressed, remaining:', suppressedUntil - now);
         return;
       }
 
@@ -81,7 +80,6 @@ export function scrollSpyPlugin(
         if (now - lastSwitchAt < HYSTERESIS_MS && from === 'live') return;
         lastSwitchAt = now;
         lastActiveId = nextId;
-        console.log('Scroll spy active heading changed to:', nextId);
         onActive(nextId, 'scroll');
       }
     }
@@ -122,7 +120,6 @@ export function scrollSpyPlugin(
     const instance = {
       suppress(ms = 900) {
         suppressedUntil = performance.now() + ms;
-        console.log('Scroll spy suppressed for:', ms, 'ms');
       },
       update(u: ViewUpdate) { onUpdate(u); },
       destroy() {

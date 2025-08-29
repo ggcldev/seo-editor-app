@@ -149,7 +149,7 @@ export const OutlinePane = React.memo(function OutlinePane({
   // Polite auto-scroll for non-virtual mode
   const userScrollUntil = useRef(0);
   const markUserScroll = useCallback(() => { userScrollUntil.current = Date.now() + 300; }, []);
-  const isUserScrolling = () => Date.now() < userScrollUntil.current;
+  const isUserScrolling = useCallback(() => Date.now() < userScrollUntil.current, []);
 
   useEffect(() => {
     if (useVirtual) return; // Skip for virtual mode
@@ -263,7 +263,7 @@ export const OutlinePane = React.memo(function OutlinePane({
         if (canFold &&  isFolded) { e.preventDefault(); toggleFold(h.id); } 
         break;
     }
-  }, [visible.length, bus, toggleFold, useVirtual]);
+  }, [visible.length, bus, toggleFold]);
 
   return (
     <aside

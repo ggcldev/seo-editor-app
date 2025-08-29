@@ -1,4 +1,5 @@
 // src/core/BusContext.tsx
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useMemo } from 'react';
 import { createEventBus } from './eventBus';
 import type { AppEvents } from './eventBus';

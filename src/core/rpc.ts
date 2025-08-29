@@ -10,7 +10,7 @@ export function createWorkerRPC<TReq extends { method: string }, TRes>(url: URL)
   return {
     call(payload: TReq): Promise<TRes> {
       const id = ++seq;
-      (w as any).postMessage({ id, v: 1, ...payload });
+      (w as Worker & { postMessage: (data: unknown) => void }).postMessage({ id, v: 1, ...payload });
       return new Promise(res => waits.set(id, res));
     },
     terminate() { w.terminate(); }

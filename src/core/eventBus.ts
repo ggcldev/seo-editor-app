@@ -6,13 +6,13 @@ export type AppEvents = {
   'outline:active': { id: string | null; offset: number | null; source?: 'scroll' | 'outline' };
   'nav:jump': { offset: number; source: 'outline' | 'search' | 'toc' };
   'scrollspy:state': { flying: boolean; target?: number };
-  'outline:request': {};
+  'outline:request': Record<string, never>;
 };
 
 export type Unsub = () => void;
 
-export function createEventBus<T extends Record<string, any>>() {
-  const map = new Map<keyof T, Set<(p: any) => void>>();
+export function createEventBus<T extends Record<string, unknown>>() {
+  const map = new Map<keyof T, Set<(p: unknown) => void>>();
   return {
     on<K extends keyof T>(k: K, fn: (p: T[K]) => void): Unsub {
       const set = map.get(k) ?? (map.set(k, new Set()), map.get(k)!);

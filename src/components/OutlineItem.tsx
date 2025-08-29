@@ -21,7 +21,6 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
     if (!el) return;
     const check = () => {
       const truncated = el.scrollWidth > el.clientWidth;
-      console.log(`${item.text}: scrollWidth=${el.scrollWidth}, clientWidth=${el.clientWidth}, truncated=${truncated}`);
       setIsTruncated(truncated);
     };
     check();
