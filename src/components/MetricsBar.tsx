@@ -14,7 +14,7 @@ export const MetricsBar = memo(function MetricsBar({ markdown }: MetricsBarProps
   }, []);
 
   useEffect(() => {
-    calculateMetricsThrottled(markdown, updateMetrics);
+    calculateMetricsThrottled(markdown, updateMetrics, {});
   }, [markdown, updateMetrics]);
 
   // Ensure any pending throttle is cleared on unmount (route changes, etc.)

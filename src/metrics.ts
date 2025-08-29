@@ -1,106 +1,70 @@
+import { normalizeEOL } from './utils/eol';
+
 export interface TextMetrics {
   words: number;
   characters: number;
   charactersNoSpaces: number;
   paragraphs: number;
-  readingTime: number; // in minutes
+  readingTime: number; // minutes, 1 decimal
 }
 
-// Optimized metrics calculation with faster algorithms
-export function calculateMetrics(text: string): TextMetrics {
-  if (!text || text.length === 0) {
-    return {
-      words: 0,
-      characters: 0,
-      charactersNoSpaces: 0,
-      paragraphs: 0,
-      readingTime: 0
-    };
-  }
+export interface MetricsOptions {
+  wordsPerMinute?: number; // default 200
+}
 
-  const characters = text.length;
-  
-  // Fast word count - count non-whitespace runs instead of splitting
-  let words = 0;
-  let inWord = false;
-  let charactersNoSpaces = 0;
-  let paragraphs = 1; // Start with 1, increment on double newlines
-  let consecutiveNewlines = 0;
-  
+export function calculateMetrics(text: string, opts: MetricsOptions = {}): TextMetrics {
+  const wpm = Math.max(60, Math.min(400, opts.wordsPerMinute ?? 200));
+
+  // Normalize all line endings and Unicode separators
+  const t = normalizeEOL(text).replace(/\u2028|\u2029/g, '\n');
+  const characters = t.length;
+
+  let words = 0, inWord = false, charactersNoSpaces = 0;
   for (let i = 0; i < characters; i++) {
-    const char = text[i];
-    
-    if (char === '\n') {
-      consecutiveNewlines++;
-      if (consecutiveNewlines >= 2) {
-        paragraphs++;
-        consecutiveNewlines = 0; // Reset to avoid counting multiple consecutive newlines
-      }
-      if (inWord) {
-        words++;
-        inWord = false;
-      }
-    } else if (char === ' ' || char === '\t' || char === '\r') {
-      consecutiveNewlines = 0;
-      if (inWord) {
-        words++;
-        inWord = false;
-      }
+    const ch = t.charCodeAt(i);
+    const isSpace = ch === 32 || ch === 10 || ch === 9 || ch === 13 || ch === 160;
+    if (!isSpace) charactersNoSpaces++;
+    if (isSpace) {
+      if (inWord) { words++; inWord = false; }
     } else {
-      consecutiveNewlines = 0;
-      charactersNoSpaces++;
-      if (!inWord) {
-        inWord = true;
-      }
+      inWord = true;
     }
   }
-  
-  // Count the last word if text doesn't end with whitespace
-  if (inWord) {
-    words++;
-  }
-  
-  // Ensure at least 1 paragraph if there's content
-  if (paragraphs === 0 && charactersNoSpaces > 0) {
-    paragraphs = 1;
-  }
-  
-  // Reading time - average 200 words per minute, minimum 1 minute
-  const readingTime = Math.max(1, Math.ceil(words / 200));
-  
-  return {
-    words,
-    characters,
-    charactersNoSpaces,
-    paragraphs,
-    readingTime
-  };
+  if (inWord) words++;
+
+  // Paragraphs = blocks separated by 2+ newlines
+  const paragraphs = t.trim().length
+    ? t.split(/\n{2,}/).length
+    : 0;
+
+  const minutes = Math.max(0, Math.round((words / wpm) * 10) / 10);
+
+  return { words, characters, charactersNoSpaces, paragraphs, readingTime: minutes };
 }
 
-// Throttled version for real-time updates with adaptive performance
-let throttleTimeout: number | null = null;
+// Throttled version with trailing-invoke
+let throttleId: number | null = null;
+let pendingArgs: [string, MetricsOptions, (m: TextMetrics) => void] | null = null;
 let lastResult: TextMetrics = { words: 0, characters: 0, charactersNoSpaces: 0, paragraphs: 0, readingTime: 0 };
 
-export function calculateMetricsThrottled(text: string, callback: (metrics: TextMetrics) => void): void {
-  // For very short texts, calculate immediately
-  if (text.length < 100) {
-    const result = calculateMetrics(text);
-    lastResult = result;
-    callback(result);
-    return;
-  }
-  
-  // For longer texts, throttle the calculation
-  if (throttleTimeout) {
-    clearTimeout(throttleTimeout);
-  }
-  
-  throttleTimeout = window.setTimeout(() => {
-    const result = calculateMetrics(text);
-    lastResult = result;
-    callback(result);
-    throttleTimeout = null;
-  }, 150); // 150ms throttle for smoother typing
+export function calculateMetricsThrottled(
+  text: string,
+  callback: (m: TextMetrics) => void,
+  opts: MetricsOptions = {},
+  wait = 150
+): void {
+  pendingArgs = [text, opts, callback];
+  if (throttleId != null) return;
+
+  throttleId = window.setTimeout(() => {
+    if (pendingArgs) {
+      const [tx, options, cb] = pendingArgs;
+      pendingArgs = null;
+      const res = (lastResult = calculateMetrics(tx, options));
+      cb(res);
+    }
+    throttleId = null;
+  }, wait);
 }
 
 export function getLastMetrics(): TextMetrics {
@@ -108,8 +72,9 @@ export function getLastMetrics(): TextMetrics {
 }
 
 export function cancelMetricsThrottle(): void {
-  if (throttleTimeout) {
-    clearTimeout(throttleTimeout);
-    throttleTimeout = null;
+  if (throttleId != null) { 
+    clearTimeout(throttleId); 
+    throttleId = null; 
   }
+  pendingArgs = null;
 }
