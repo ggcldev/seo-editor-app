@@ -1,6 +1,6 @@
 // hooks/useOutline.ts
 import { useMemo } from "react";
-import { makeHeadingId } from "../utils/ids";
+import { makeHeadingIdStable } from "../utils/ids";
 
 export type Heading = {
   id: string;
@@ -18,6 +18,7 @@ export type Heading = {
 export function useOutline(markdown: string): Heading[] {
   return useMemo(() => {
     const out: Heading[] = [];
+    const seen = new Map<string, number>(); // Track slug usage for stable de-duplication
     const len = markdown.length;
 
     let i = 0;
@@ -53,7 +54,7 @@ export function useOutline(markdown: string): Heading[] {
           const text = atx[2].trim();
           const offset = i; // start of the line
           out.push({
-            id: makeHeadingId(text, offset),
+            id: makeHeadingIdStable(text, seen),
             text,
             level,
             offset
@@ -75,7 +76,7 @@ export function useOutline(markdown: string): Heading[] {
                 const text = trimmed;
                 const offset = i;
                 out.push({
-                  id: makeHeadingId(text, offset),
+                  id: makeHeadingIdStable(text, seen),
                   text,
                   level,
                   offset

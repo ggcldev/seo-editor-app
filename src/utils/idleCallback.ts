@@ -1,17 +1,17 @@
-export function idleCallback(cb: () => void, timeout = 200) {
-  if ('requestIdleCallback' in window) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (window as any).requestIdleCallback(cb, { timeout });
-  } else {
-    return setTimeout(cb, timeout);
+export type IdleId = number;
+
+export function idleCallback(cb: () => void, timeout = 200): IdleId {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    return (window as unknown as { requestIdleCallback: (cb: () => void, opts: { timeout: number }) => number }).requestIdleCallback(cb, { timeout }) as IdleId;
   }
+  // Fallback: DOM timers return number; cast for SSR builds
+  return (setTimeout(cb, timeout) as unknown) as IdleId;
 }
 
-export function cancelIdleCallback(id: number) {
-  if ('cancelIdleCallback' in window) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).cancelIdleCallback(id);
+export function cancelIdleCallback(id: IdleId) {
+  if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+    (window as unknown as { cancelIdleCallback: (id: number) => void }).cancelIdleCallback(id);
   } else {
-    clearTimeout(id);
+    clearTimeout(id as unknown as number);
   }
 }
