@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useLayoutEffect } from 'react';
 import type { Heading } from '../hooks/useOutline';
 
 type OutlineItemProps = { 
@@ -13,6 +13,23 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
   const fontSize = item.level <= 3 ? 13 : 12;
   const accentOpacity = item.level <= 3 ? 1 : 0.7;
 
+  const textRef = useRef<HTMLSpanElement | null>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const check = () => {
+      const truncated = el.scrollWidth > el.clientWidth;
+      console.log(`${item.text}: scrollWidth=${el.scrollWidth}, clientWidth=${el.clientWidth}, truncated=${truncated}`);
+      setIsTruncated(truncated);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [item.text]);
+
   return (
     <div
       style={{
@@ -25,6 +42,7 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
         display: 'flex',
         alignItems: 'baseline',
         gap: 4,
+        minWidth: 0, // Allow container to shrink below content width
         fontWeight: isActive ? 600 : 400,
         borderLeft: isActive ? '3px solid #6b7280' : '3px solid transparent',
         transition: 'all 0.2s ease',
@@ -34,14 +52,24 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
       <span style={{ color: `rgba(37, 99, 235, ${accentOpacity})`, fontSize: 11, fontWeight: 700 }}>
         H{item.level}
       </span>
-      <span style={{ 
-        fontWeight: 500, 
-        whiteSpace: 'nowrap', 
-        overflow: 'hidden', 
-        textOverflow: 'ellipsis',
-        flex: '1 1 auto',
-        minWidth: 0
-      }}>{item.text}</span>
+      <span 
+        ref={textRef}
+        style={{ 
+          fontWeight: 500, 
+          whiteSpace: 'nowrap', 
+          overflow: 'hidden', 
+          textOverflow: 'ellipsis',
+          flex: '1 1 auto',
+          minWidth: 0,
+          // Apply fade only when truncated
+          ...(isTruncated && {
+            WebkitMaskImage: 'linear-gradient(to right, black 0%, black 85%, transparent 100%)',
+            maskImage: 'linear-gradient(to right, black 0%, black 85%, transparent 100%)',
+          })
+        }}
+      >
+        {item.text}
+      </span>
     </div>
   );
 }
