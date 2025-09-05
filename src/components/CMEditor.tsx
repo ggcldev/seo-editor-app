@@ -81,6 +81,24 @@ function computeOutlineFromDoc(doc: string): Heading[] {
   return out;
 }
 
+function isHeadingLine(doc: string, lineFrom: number): boolean {
+  // Examine the line starting at `lineFrom` — matches ATX headings (# ...).
+  const nl = doc.indexOf('\n', lineFrom);
+  const lineEnd = nl === -1 ? doc.length : nl;
+  const line = doc.slice(lineFrom, lineEnd);
+  return /^\s{0,3}#{1,6}\s+/.test(line);
+}
+
+function findHeadingAtPos(outline: Heading[], pos: number): Heading | null {
+  // Outline headings are sorted by offset; find the last heading whose offset <= pos
+  let lo = 0, hi = outline.length - 1, ans = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (outline[mid].offset <= pos) { ans = mid; lo = mid + 1; } else { hi = mid - 1; } }
+  if (ans < 0) return null;
+  const h = outline[ans];
+  // Ensure the caret is still on the *same line* as the heading (prevents selecting a paragraph under it)
+  return h;
+}
+
 function updateOutlineIncremental(
   prev: Heading[],
   changes: import("@codemirror/state").ChangeDesc
@@ -192,7 +210,33 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         EditorView.updateListener.of((u) => {
           // Keep upstream state in sync
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
-          if (u.selectionSet) onCaretRef.current(u.state.selection.main.head);
+          if (u.selectionSet) {
+            const head = u.state.selection.main.head;
+            onCaretRef.current(head);
+
+            // If the user clicked/selected and the caret sits on a heading line,
+            // emit outline:active so the OutlinePane selects the same heading.
+            const userSelect = u.transactions.some(t => t.isUserEvent("select"));
+            if (userSelect) {
+              // Confirm caret is on a heading line
+              const docStr = u.state.doc.toString();
+              const line = u.state.doc.lineAt(head);
+              if (isHeadingLine(docStr, line.from)) {
+                // Map caret to the heading in our current outline snapshot
+                const currentOutline = outlineRef.current;
+                const h = findHeadingAtPos(currentOutline, line.from);
+                
+                if (h) {
+                  // Let OutlinePane highlight/follow this row
+                  bus.emit('outline:active', {
+                    id: h.id,
+                    offset: h.offset,
+                    source: 'click'
+                  });
+                }
+              }
+            }
+          }
 
           // Temporarily suppress scroll spy during typing to avoid interference
           const isTyping = u.transactions.some(t => t.isUserEvent("input") || t.isUserEvent("delete"));

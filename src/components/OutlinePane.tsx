@@ -136,11 +136,42 @@ export const OutlinePane = React.memo(function OutlinePane({
     const off = bus.on('outline:active', ({ id, source }) => {
       const i = id ? (idToIdx.get(id) ?? 0) : 0;
       setFocusIdx(i);
-      // Only call ensureVisible for virtual mode
+      // Handle scrolling for all modes and sources
       if (useVirtual) {
         // Soft follow for scroll; full ensure for keyboard/click
         const bandRows = source === 'scroll' ? 3 : 0; // 0 = nearest behavior
         listRef.current?.ensureVisible(i, { bandRows });
+      } else {
+        // Non-virtual mode: handle all sources with immediate scrolling
+        const forceScroll = source === 'click' || source === 'keyboard';
+        const delay = forceScroll ? 50 : 0; // Delay for click/keyboard to avoid conflicts
+        
+        setTimeout(() => {
+          // Find the correct scrollable container - the inner .outline-scroll div
+          const outerContainer = scrollRef.current;
+          const container = outerContainer?.querySelector('.outline-scroll') as HTMLElement || outerContainer;
+          const targetElement = document.getElementById(`toc-${id}`);
+          if (container && targetElement) {
+            const itemTop = targetElement.offsetTop;
+            const itemBottom = itemTop + targetElement.offsetHeight;
+            const viewTop = container.scrollTop;
+            const viewBottom = viewTop + container.clientHeight;
+            const margin = 16;
+
+            if (itemTop < viewTop + margin || itemBottom > viewBottom - margin) {
+              const scrollTop = Math.max(0, itemTop - margin);
+              
+              if (forceScroll) {
+                // For clicks: force both immediate and smooth
+                container.scrollTop = scrollTop;
+                container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+              } else {
+                // For scroll events: gentle smooth scrolling only
+                container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+              }
+            }
+          }
+        }, delay);
       }
     });
     return off;

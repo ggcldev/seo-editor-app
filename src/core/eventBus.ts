@@ -3,7 +3,7 @@ import type { Heading } from '../hooks/useOutline';
 
 export type AppEvents = {
   'outline:computed': { headings: Heading[]; version: number };
-  'outline:active': { id: string | null; offset: number | null; source?: 'scroll' | 'outline' };
+  'outline:active': { id: string | null; offset: number | null; source?: 'scroll' | 'outline' | 'click' | 'keyboard' };
   'nav:jump': { offset: number; source: 'outline' | 'search' | 'toc' };
   'scrollspy:state': { flying: boolean; target?: number };
   'outline:request': Record<string, never>;
