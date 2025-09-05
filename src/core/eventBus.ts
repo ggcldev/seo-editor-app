@@ -12,18 +12,17 @@ export type AppEvents = {
 export type Unsub = () => void;
 
 export function createEventBus<T extends Record<string, unknown>>() {
-  type Handler<K extends keyof T> = (p: T[K]) => void;
-  const map = new Map<keyof T, Set<Handler<any>>>();
-
+  // Store listeners in an erased form to avoid variance issues
+  const map = new Map<keyof T, Set<(p: any) => void>>();
   return {
-    on<K extends keyof T>(k: K, fn: Handler<K>): Unsub {
-      const set = (map.get(k) ?? (map.set(k, new Set()), map.get(k)!)) as Set<Handler<K>>;
-      set.add(fn);
-      return () => set.delete(fn);
+    on<K extends keyof T>(k: K, fn: (p: T[K]) => void): Unsub {
+      const set = map.get(k) ?? (map.set(k, new Set()), map.get(k)!);
+      const erased = fn as unknown as (p: any) => void;
+      set.add(erased);
+      return () => set.delete(erased);
     },
     emit<K extends keyof T>(k: K, payload: T[K]): void {
-      const set = map.get(k) as Set<Handler<K>> | undefined;
-      set?.forEach(fn => fn(payload));
+      map.get(k)?.forEach(fn => (fn as unknown as (p: T[K]) => void)(payload));
     },
     clear(): void { map.clear(); }
   };
