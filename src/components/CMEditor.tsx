@@ -8,6 +8,7 @@ import type { Heading } from "../hooks/useOutline";
 import { scrollSpyPlugin } from "../cmScrollSpy";
 import { useBus } from "../core/BusContext";
 import { ScrollSync } from "../core/scrollSync";
+import { OutlineIndex } from "../core/outlineIndex";
 
 
 type Props = {
@@ -122,6 +123,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const outlineRef = useRef<Heading[]>([]);
   const prevDocRef = useRef<string>(markdown);
   const scrollSpyRef = useRef<{ suppress: (ms?: number) => void } | null>(null);
+  const lastActiveIdRef = useRef<string | null>(null);
   
   // Create scroll spy plugin instance once
   const scrollSpy = useMemo(() => scrollSpyPlugin(
@@ -201,6 +203,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             scrollSyncRef.current?.suppress(200); // Also suppress ScrollSync
           }
 
+          // Ignore programmatic selection moves (e.g., from outline clicks)
+          const isProgrammaticSelect = u.transactions.some(t => t.annotation(ProgrammaticSelect) === true);
+
           // Recompute outline on doc changes (single source of truth)
           if (u.docChanged) {
             const nextDoc = u.state.doc.toString();
@@ -233,6 +238,18 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
               outlineRef.current = next;
               // EventBus: emit updated outline
               bus.emit('outline:computed', { headings: next, version: Date.now() });
+            }
+          }
+
+          // After changes or cursor moves, update active heading from caret when user-driven
+          if ((u.docChanged || u.selectionSet) && !isProgrammaticSelect) {
+            const caret = u.state.selection.main.head;
+            const index = new OutlineIndex(outlineRef.current.map(h => ({ id: h.id, pos: h.offset })));
+            const nextId = index.idAtOrBefore(caret);
+            if (nextId && nextId !== lastActiveIdRef.current) {
+              lastActiveIdRef.current = nextId;
+              const heading = outlineRef.current.find(h => h.id === nextId);
+              bus.emit('outline:active', { id: nextId, offset: heading?.offset ?? null, source: 'scroll' });
             }
           }
 
@@ -306,8 +323,12 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
         const doc = view.state.doc.toString();
         const cursorPos = targetHeading ? caretAtHeadingEnd(doc, targetHeading) : offset;
         
-        // 1) Put the caret at the end of heading text for editing
-        view.dispatch({ selection: EditorSelection.cursor(cursorPos), scrollIntoView: false });
+        // 1) Put the caret at the end of heading text for editing (tagged as programmatic)
+        view.dispatch({ 
+          selection: EditorSelection.cursor(cursorPos), 
+          scrollIntoView: false,
+          annotations: ProgrammaticSelect.of(true)
+        });
         
         // 2) Center the heading offset (not cursor position)
         view.dispatch({ effects: EditorView.scrollIntoView(offset, { y: "center" }) });
