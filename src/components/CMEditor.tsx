@@ -4,7 +4,8 @@ import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
 import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
-import type { Heading } from "../hooks/useOutline";
+import type { Heading } from "../core/outlineParser";
+import { parseOutline } from "../core/outlineParser";
 import { scrollSpyPlugin } from "../cmScrollSpy";
 import { useBus } from "../core/BusContext";
 import { ScrollSync } from "../core/scrollSync";
@@ -62,24 +63,8 @@ function slugify(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function computeOutlineFromDoc(doc: string): Heading[] {
-  const out: Heading[] = [];
-  let offset = 0;
-  const lines = doc.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    // ATX style with up to 3 leading spaces: ^\s{0,3}#{1,6}\s+Heading [optional trailing #...]
-    const m = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
-    if (m) {
-      const level = m[1].length;
-      const raw = m[2].trim();
-      const id = `${slugify(raw) || "heading"}@${offset}`;
-      out.push({ id, level, text: raw, offset });
-    }
-    offset += line.length + 1; // + newline
-  }
-  return out;
-}
+// compute outline via shared parser
+const computeOutlineFromDoc = parseOutline;
 
 function updateOutlineIncremental(
   prev: Heading[],
