@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Heading } from '../hooks/useOutline';
+import type { Heading } from '../core/outlineParser';
 import { OutlineItem } from './OutlineItem';
 import { useBus } from '../core/BusContext';
 import { VirtualList, type VirtualListHandle } from './VirtualList';

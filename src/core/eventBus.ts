@@ -1,5 +1,5 @@
 // src/core/eventBus.ts
-import type { Heading } from '../hooks/useOutline';
+import type { Heading } from './outlineParser';
 
 export type AppEvents = {
   'outline:computed': { headings: Heading[]; version: number };
@@ -12,16 +12,19 @@ export type AppEvents = {
 export type Unsub = () => void;
 
 export function createEventBus<T extends Record<string, unknown>>() {
-  const map = new Map<keyof T, Set<(p: unknown) => void>>();
+  type Handler<K extends keyof T> = (p: T[K]) => void;
+  const map = new Map<keyof T, Set<Handler<any>>>();
+
   return {
-    on<K extends keyof T>(k: K, fn: (p: T[K]) => void): Unsub {
-      const set = map.get(k) ?? (map.set(k, new Set()), map.get(k)!);
+    on<K extends keyof T>(k: K, fn: Handler<K>): Unsub {
+      const set = (map.get(k) ?? (map.set(k, new Set()), map.get(k)!)) as Set<Handler<K>>;
       set.add(fn);
       return () => set.delete(fn);
     },
-    emit<K extends keyof T>(k: K, payload: T[K]) {
-      map.get(k)?.forEach(fn => fn(payload));
+    emit<K extends keyof T>(k: K, payload: T[K]): void {
+      const set = map.get(k) as Set<Handler<K>> | undefined;
+      set?.forEach(fn => fn(payload));
     },
-    clear() { map.clear(); }
+    clear(): void { map.clear(); }
   };
 }

@@ -1,5 +1,5 @@
 // src/core/outlineCore.ts
-import type { Heading } from '../hooks/useOutline';
+import type { Heading } from './outlineParser';
 
 export class OutlineIndex {
   readonly idToIdx = new Map<string, number>();

@@ -1,6 +1,6 @@
 // cmScrollSpy.ts
 import { ViewPlugin, ViewUpdate } from "@codemirror/view";
-import type { Heading } from "./hooks/useOutline";
+import type { Heading } from "./core/outlineParser";
 
 type GetOutline = () => Heading[];
 type OnActive = (id: string | null, source: 'scroll') => void;

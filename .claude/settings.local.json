@@ -22,7 +22,10 @@
       "Bash(tsc --noEmit)",
       "Bash(node:*)",
       "Bash(npm outdated)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(npx tsc:*)",
+      "Bash(tsc --version)",
+      "Bash(tsc --noEmit --strict)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

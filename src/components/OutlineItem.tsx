@@ -1,5 +1,5 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
-import type { Heading } from '../hooks/useOutline';
+import type { Heading } from '../core/outlineParser';
 
 type OutlineItemProps = { 
   item: Heading;
