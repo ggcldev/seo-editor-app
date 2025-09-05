@@ -131,22 +131,31 @@ export const OutlinePane = React.memo(function OutlinePane({
     return nearestCollapsedAncestorId(outline, activeHeadingId, collapsed) ?? activeHeadingId;
   }, [outline, activeHeadingId, collapsed]);
 
-  // Soft follow for active heading changes
+  // Soft follow for active heading changes with debouncing
   useEffect(() => {
+    let scrollTimeout: number | undefined;
+    
     const off = bus.on('outline:active', ({ id, source }) => {
       const i = id ? (idToIdx.get(id) ?? 0) : 0;
       setFocusIdx(i);
+      
+      // Clear any pending scroll operations to prevent jumping
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = undefined;
+      }
+      
       // Handle scrolling for all modes and sources
       if (useVirtual) {
         // Soft follow for scroll; full ensure for keyboard/click
         const bandRows = source === 'scroll' ? 3 : 0; // 0 = nearest behavior
         listRef.current?.ensureVisible(i, { bandRows });
       } else {
-        // Non-virtual mode: handle all sources with immediate scrolling
+        // Non-virtual mode: debounce scroll events to reduce jumping
         const forceScroll = source === 'click' || source === 'keyboard';
-        const delay = forceScroll ? 50 : 0; // Delay for click/keyboard to avoid conflicts
+        const delay = forceScroll ? 50 : (source === 'scroll' ? 100 : 0); // Extra delay for scroll events
         
-        setTimeout(() => {
+        scrollTimeout = window.setTimeout(() => {
           // Find the correct scrollable container - the inner .outline-scroll div
           const outerContainer = scrollRef.current;
           const container = outerContainer?.querySelector('.outline-scroll') as HTMLElement || outerContainer;
@@ -162,19 +171,26 @@ export const OutlinePane = React.memo(function OutlinePane({
               const scrollTop = Math.max(0, itemTop - margin);
               
               if (forceScroll) {
-                // For clicks: force both immediate and smooth
+                // For clicks: force immediate positioning, then smooth
                 container.scrollTop = scrollTop;
-                container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                requestAnimationFrame(() => {
+                  container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                });
               } else {
                 // For scroll events: gentle smooth scrolling only
                 container.scrollTo({ top: scrollTop, behavior: 'smooth' });
               }
             }
           }
+          scrollTimeout = undefined;
         }, delay);
       }
     });
-    return off;
+    
+    return () => {
+      off();
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
   }, [bus, idToIdx, useVirtual]);
   
   // Polite auto-scroll for non-virtual mode

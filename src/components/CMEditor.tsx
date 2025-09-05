@@ -196,6 +196,9 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             // emit outline:active so the OutlinePane selects the same heading.
             const userSelect = u.transactions.some(t => t.isUserEvent("select"));
             if (userSelect) {
+              // Suppress the scroll spy plugin to prevent conflicts
+              scrollSpy.suppress(300); // Suppress for 300ms to avoid conflicting events
+              
               // Confirm caret is on a heading line
               const docStr = u.state.doc.toString();
               const line = u.state.doc.lineAt(head);
