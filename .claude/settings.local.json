@@ -25,7 +25,9 @@
       "Bash(cp:*)",
       "Bash(npx tsc:*)",
       "Bash(tsc --version)",
-      "Bash(tsc --noEmit --strict)"
+      "Bash(tsc --noEmit --strict)",
+      "Read(//Users/genylgicalde/Downloads/**)",
+      "Bash(npm ls:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
