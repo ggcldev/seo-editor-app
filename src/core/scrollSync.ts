@@ -24,11 +24,17 @@ export class ScrollSync {
   maybeRelease(now = Date.now()) {
     if (this.target == null) return now >= this.until;
     const rect = this.view.scrollDOM.getBoundingClientRect();
-    const anchorPos = this.view.posAtCoords({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }) ?? 0;
-    if (Math.abs(anchorPos - this.target) <= this.calmBandPx || now >= this.until) {
-      this.target = null;
-      return true;
+    const mid = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const targetCoords = this.view.coordsAtPos(this.target);
+    if (targetCoords) {
+      const dy = Math.abs(targetCoords.top - mid.y);
+      if (dy <= this.calmBandPx || now >= this.until) {
+        this.target = null;
+        return true;
+      }
+      return false;
     }
+    if (now >= this.until) { this.target = null; return true; }
     return false;
   }
 }
