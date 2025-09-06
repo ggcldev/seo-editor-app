@@ -13,11 +13,11 @@ export type Unsub = () => void;
 
 export function createEventBus<T extends Record<string, unknown>>() {
   // Store listeners in an erased form to avoid variance issues
-  const map = new Map<keyof T, Set<(p: any) => void>>();
+  const map = new Map<keyof T, Set<(p: unknown) => void>>();
   return {
     on<K extends keyof T>(k: K, fn: (p: T[K]) => void): Unsub {
       const set = map.get(k) ?? (map.set(k, new Set()), map.get(k)!);
-      const erased = fn as unknown as (p: any) => void;
+      const erased = fn as unknown as (p: unknown) => void;
       set.add(erased);
       return () => set.delete(erased);
     },
