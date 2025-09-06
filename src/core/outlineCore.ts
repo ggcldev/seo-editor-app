@@ -20,13 +20,14 @@ export class OutlineIndex {
 
   nearestByOffset(offset: number): number {
     if (this.offsets.length === 0) return -1;
+    // Binary search for the first heading at or after the given offset
     let lo = 0, hi = this.offsets.length - 1;
     while (lo < hi) {
-      const mid = (lo + hi) >> 1;
+      const mid = (lo + hi) >> 1; // Bit shift for fast division by 2
       if (this.offsets[mid] < offset) {
-        lo = mid + 1;
+        lo = mid + 1; // Target is in right half
       } else {
-        hi = mid;
+        hi = mid; // Target is in left half (including mid)
       }
     }
     return lo;
@@ -41,15 +42,17 @@ export class OutlineIndex {
     const n = this.offsets.length;
     if (n === 0) return -1;
     let lo = 0, hi = n - 1, ans = -1;
+    // Binary search for rightmost heading where offset >= heading.offset
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
       if (this.offsets[mid] <= offset) {
-        ans = mid;
-        lo = mid + 1;
+        ans = mid; // Valid candidate - heading is at or before offset
+        lo = mid + 1; // Look for later headings that still qualify
       } else {
-        hi = mid - 1;
+        hi = mid - 1; // Heading is after offset, search earlier
       }
     }
+    // If no heading found at or before offset, default to first heading (prevents outline jumping)
     return ans === -1 ? 0 : ans;
   }
 
@@ -64,13 +67,15 @@ export class OutlineIndex {
     const chain: number[] = [];
     const items = this.items;
     let curLevel = items[idx].level;
+    // Walk backwards to find parent headings (lower level numbers)
     for (let i = idx - 1; i >= 0; i--) {
       if (items[i].level < curLevel) {
-        chain.push(i);
-        curLevel = items[i].level;
-        if (curLevel === 1) break;
+        chain.push(i); // Found a parent heading
+        curLevel = items[i].level; // Update current level to find grandparents
+        if (curLevel === 1) break; // Stop at top-level heading
       }
     }
+    // Reverse to get ancestry from root to immediate parent
     return chain.reverse();
   }
 
@@ -78,11 +83,12 @@ export class OutlineIndex {
     if (!prefix || this.items.length === 0) return -1;
     const p = prefix.toLowerCase();
     const n = this.items.length;
+    // Circular search starting from the next item after startIdx
     for (let k = 1; k <= n; k++) {
-      const i = (startIdx + k) % n;
+      const i = (startIdx + k) % n; // Wrap around to beginning if needed
       if (this.items[i].text.toLowerCase().startsWith(p)) return i;
     }
-    return -1;
+    return -1; // No matching heading found
   }
 
   // Bonus: Get all items at specific level

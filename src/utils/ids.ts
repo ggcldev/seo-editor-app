@@ -1,31 +1,37 @@
 // utils/ids.ts
+
+// Unicode-aware regex: matches anything that's not letters, numbers, dashes, or spaces
 const NON_ALNUM_DASH_SPACE = /[^-\p{Letter}\p{Number}\s]/gu;
+// Matches runs of whitespace, underscores, and dashes to normalize them
 const SPACE_RUNS = /[\s_-]+/g;
 
 export function slugifyHeading(text: string): string {
-  // Normalize, strip diacritics, keep letters/numbers across scripts
+  // Normalize Unicode and strip diacritics, keeping letters/numbers from all scripts
   const base = text
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFKD')                          // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '')           // Remove combining diacritical marks
     .trim()
-    .replace(NON_ALNUM_DASH_SPACE, ' ')
-    .replace(SPACE_RUNS, ' ')
+    .replace(NON_ALNUM_DASH_SPACE, ' ')        // Replace special chars with spaces
+    .replace(SPACE_RUNS, ' ')                  // Normalize multiple spaces/dashes
     .trim()
     .toLowerCase()
-    .replace(/ /g, '-');
+    .replace(/ /g, '-');                       // Convert spaces to hyphens
 
-  return base || 'section';
+  return base || 'section'; // Fallback for empty or special-char-only headings
 }
 
-/** Stable, human-friendly IDs with deterministic de-dupe. */
+/** 
+ * Stable, human-friendly IDs with deterministic de-duplication.
+ * Uses a counter map to ensure identical headings get unique suffixes.
+ */
 export function makeHeadingIdStable(
   text: string,
-  seen: Map<string, number>
+  seen: Map<string, number> // Tracks usage count for each base slug
 ): string {
   const slug = slugifyHeading(text);
-  const n = (seen.get(slug) ?? 0) + 1;
+  const n = (seen.get(slug) ?? 0) + 1; // Increment counter for this slug
   seen.set(slug, n);
-  return n === 1 ? slug : `${slug}-${n}`;
+  return n === 1 ? slug : `${slug}-${n}`; // First occurrence gets no suffix
 }
 
 // Back-compat for legacy offset-based IDs (keep, but prefer the stable API)

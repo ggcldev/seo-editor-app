@@ -113,6 +113,30 @@ Final deep content.`);
     };
   }, [isResizing]);
 
+  /*
+   * Error Boundary Architecture:
+   * 
+   * AppErrorBoundary - Catches catastrophic errors that crash the entire app
+   *   └── BusProvider - Event bus for component communication
+   *       ├── OutlineErrorBoundary - Isolates outline panel errors
+   *       │   └── OutlinePane - Document outline and navigation
+   *       └── Editor Container
+   *           ├── MetricsErrorBoundary - Isolates metrics calculation errors
+   *           │   └── MetricsBar - Word count, reading time, etc.
+   *           └── EditorErrorBoundary - Isolates main editor errors
+   *               └── CMEditor - CodeMirror-based markdown editor
+   *
+   * Each boundary provides graceful degradation:
+   * - Metrics failure: Shows warning, editor remains functional
+   * - Outline failure: Shows error message, editor remains functional  
+   * - Editor failure: Shows editor unavailable, offers reload
+   * - App failure: Shows full-screen error with recovery options
+   *
+   * Global error handling (via errorReporting.ts) also captures:
+   * - Unhandled promise rejections
+   * - Chunk loading failures (code-splitting errors)
+   * - Synchronous JavaScript errors
+   */
   return (
     <BusProvider>
       <div

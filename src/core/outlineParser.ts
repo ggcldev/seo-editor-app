@@ -28,31 +28,32 @@ export function parseOutline(markdownInput: string): Heading[] {
   while (i <= len) {
     // Find end of current line
     let lineEnd = markdown.indexOf('\n', i);
-    if (lineEnd === -1) lineEnd = len;
+    if (lineEnd === -1) lineEnd = len; // Handle last line without newline
 
     const line = markdown.slice(i, lineEnd);
     const trimmed = line.trimEnd();
 
-    // Fence detection: ``` or ~~~ start/end (ignore language)
+    // Fence detection: ``` or ~~~ start/end (ignore language specifier)
     const fenceMatch = line.match(/^(\s*)(`{3,}|~{3,})/);
     if (fenceMatch) {
       if (!inFence) {
+        // Opening fence - start ignoring heading markers
         inFence = { fence: fenceMatch[2] };
       } else if (line.startsWith(inFence.fence)) {
-        inFence = null; // closing fence
+        // Closing fence - resume parsing headings
+        inFence = null;
       }
-      // Advance
-      i = lineEnd + 1;
+      i = lineEnd + 1; // Skip to next line
       continue;
     }
 
     if (!inFence) {
-      // ATX headings: ^\s*#{1,6}\s+Title [###]?
+      // ATX headings: ^\s*#{1,6}\s+Title [###]? (hash-style headings)
       const atx = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
       if (atx) {
-        const level = Math.min(6, atx[1].length);
-        const text = atx[2].trim();
-        const offset = i; // start of the line
+        const level = Math.min(6, atx[1].length); // Count # symbols, max 6
+        const text = atx[2].trim(); // Extract heading text, remove whitespace
+        const offset = i; // Character position of line start
         out.push({
           id: makeHeadingIdStable(text, seen),
           text,
@@ -60,19 +61,19 @@ export function parseOutline(markdownInput: string): Heading[] {
           offset
         });
       } else {
-        // Setext: a non-empty line followed by === or --- (next line)
+        // Setext: a non-empty line followed by === or --- (underline-style headings)
         if (trimmed.length > 0) {
-          // lookahead next line
+          // Look ahead to next line for potential underline
           const nextStart = lineEnd + 1;
           if (nextStart <= len) {
             let nextEnd = markdown.indexOf('\n', nextStart);
-            if (nextEnd === -1) nextEnd = len;
+            if (nextEnd === -1) nextEnd = len; // Handle last line
             const nextLine = markdown.slice(nextStart, nextEnd);
-            const setext = nextLine.match(/^\s*(=+|-+)\s*$/);
+            const setext = nextLine.match(/^\s*(=+|-+)\s*$/); // === for h1, --- for h2
             if (setext) {
               const isEq = setext[1][0] === '=';
-              const level = isEq ? 1 : 2;
-              const text = trimmed;
+              const level = isEq ? 1 : 2; // = makes h1, - makes h2
+              const text = trimmed; // Current line is the heading text
               const offset = i;
               out.push({
                 id: makeHeadingIdStable(text, seen),
@@ -80,9 +81,9 @@ export function parseOutline(markdownInput: string): Heading[] {
                 level,
                 offset
               });
-              // Skip the underline line
+              // Skip the underline line since we've processed it
               i = nextEnd + 1;
-              continue; // continue outer loop
+              continue; // Jump to outer loop to avoid double-processing
             }
           }
         }

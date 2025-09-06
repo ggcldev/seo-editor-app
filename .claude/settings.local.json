@@ -27,7 +27,8 @@
       "Bash(tsc --version)",
       "Bash(tsc --noEmit --strict)",
       "Read(//Users/genylgicalde/Downloads/**)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(npm test:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

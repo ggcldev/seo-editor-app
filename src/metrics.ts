@@ -13,36 +13,40 @@ export interface MetricsOptions {
 }
 
 export function calculateMetrics(text: string, opts: MetricsOptions = {}): TextMetrics {
+  // Clamp WPM to reasonable bounds (60-400 WPM)
   const wpm = Math.max(60, Math.min(400, opts.wordsPerMinute ?? 200));
 
-  // Normalize all line endings and Unicode separators
+  // Normalize all line endings and Unicode line/paragraph separators
   const t = normalizeEOL(text).replace(/\u2028|\u2029/g, '\n');
   const characters = t.length;
 
+  // Single-pass character analysis for performance
   let words = 0, inWord = false, charactersNoSpaces = 0;
   for (let i = 0; i < characters; i++) {
     const ch = t.charCodeAt(i);
+    // Check for common whitespace characters: space, newline, tab, CR, non-breaking space
     const isSpace = ch === 32 || ch === 10 || ch === 9 || ch === 13 || ch === 160;
     if (!isSpace) charactersNoSpaces++;
     if (isSpace) {
-      if (inWord) { words++; inWord = false; }
+      if (inWord) { words++; inWord = false; } // End of word
     } else {
-      inWord = true;
+      inWord = true; // Start/continue word
     }
   }
-  if (inWord) words++;
+  if (inWord) words++; // Handle final word if text doesn't end with whitespace
 
-  // Paragraphs = blocks separated by 2+ newlines
+  // Paragraphs = blocks separated by 2+ consecutive newlines
   const paragraphs = t.trim().length
     ? t.split(/\n{2,}/).length
     : 0;
 
+  // Reading time in minutes, rounded to 1 decimal place
   const minutes = Math.max(0, Math.round((words / wpm) * 10) / 10);
 
   return { words, characters, charactersNoSpaces, paragraphs, readingTime: minutes };
 }
 
-// Throttled version with trailing-invoke
+// Throttled version with trailing-invoke (debounced calculation for performance)
 let throttleId: number | null = null;
 let pendingArgs: [string, MetricsOptions, (m: TextMetrics) => void] | null = null;
 let lastResult: TextMetrics = { words: 0, characters: 0, charactersNoSpaces: 0, paragraphs: 0, readingTime: 0 };
@@ -53,17 +57,18 @@ export function calculateMetricsThrottled(
   opts: MetricsOptions = {},
   wait = 150
 ): void {
+  // Store most recent args to ensure latest state is processed
   pendingArgs = [text, opts, callback];
-  if (throttleId != null) return;
+  if (throttleId != null) return; // Already waiting, will use latest args
 
   throttleId = window.setTimeout(() => {
     if (pendingArgs) {
       const [tx, options, cb] = pendingArgs;
       pendingArgs = null;
-      const res = (lastResult = calculateMetrics(tx, options));
+      const res = (lastResult = calculateMetrics(tx, options)); // Cache result
       cb(res);
     }
-    throttleId = null;
+    throttleId = null; // Reset for next invocation
   }, wait);
 }
 
