@@ -119,6 +119,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const scrollSpyRef = useRef<{ suppress: (ms?: number) => void } | null>(null);
   const lastActiveIdRef = useRef<string | null>(null);
   const indexCacheRef = useRef<{ outline: Heading[]; index: OutlineIndex } | null>(null);
+  const outlineWorkerRef = useRef<Worker | null>(null);
   
   function getOutlineIndex(): OutlineIndex {
     const outline = outlineRef.current;
@@ -145,12 +146,35 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+  
+  // Initialize/cleanup the worker once
   useEffect(() => {
-    const outline = computeOutlineFromDoc(markdown);
-    outlineRef.current = outline;
-    indexCacheRef.current = null; // Invalidate cache when outline changes
-    // EventBus: publish outline snapshot
-    bus.emit('outline:computed', { headings: outline, version: Date.now() });
+    outlineWorkerRef.current = new Worker(new URL('../workers/outlineWorker.ts', import.meta.url), { type: 'module' });
+    return () => { outlineWorkerRef.current?.terminate(); outlineWorkerRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const md = markdown;
+    const bigDoc = md.length >= 50000; // threshold; tune as needed
+    if (!bigDoc || !outlineWorkerRef.current) {
+      const outline = computeOutlineFromDoc(md);
+      outlineRef.current = outline;
+      indexCacheRef.current = null;
+      bus.emit('outline:computed', { headings: outline, version: Date.now() });
+      return;
+    }
+
+    const worker = outlineWorkerRef.current;
+    const onMessage = (e: MessageEvent<Heading[]>) => {
+      outlineRef.current = e.data ?? [];
+      indexCacheRef.current = null;
+      bus.emit('outline:computed', { headings: outlineRef.current, version: Date.now() });
+      worker.removeEventListener('message', onMessage);
+    };
+    worker.addEventListener('message', onMessage);
+    worker.postMessage(md);
+
+    return () => worker.removeEventListener('message', onMessage);
   }, [markdown, bus]);
 
   const { htmlToMarkdown } = usePasteToMarkdown();
