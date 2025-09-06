@@ -32,6 +32,33 @@ export class OutlineIndex {
     return lo;
   }
 
+  /**
+   * Return the index of the last heading whose offset <= given offset.
+   * If the offset is before the first heading, returns 0 when any heading exists, or -1 otherwise.
+   * This is the stable choice for "current section" based on caret position.
+   */
+  indexAtOrBefore(offset: number): number {
+    const n = this.offsets.length;
+    if (n === 0) return -1;
+    let lo = 0, hi = n - 1, ans = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.offsets[mid] <= offset) {
+        ans = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return ans === -1 ? 0 : ans;
+  }
+
+  /** Convenience: id of heading at or before the given offset */
+  idAtOrBefore(offset: number): string | null {
+    const i = this.indexAtOrBefore(offset);
+    return i >= 0 && i < this.items.length ? this.items[i].id : null;
+  }
+
   ancestorChain(idx: number): number[] {
     if (idx < 0 || idx >= this.items.length) return [];
     const chain: number[] = [];
