@@ -3,7 +3,6 @@ import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirr
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
-import { usePasteToMarkdown } from "@/hooks/usePasteToMarkdown";
 import type { Heading } from "@/core/outlineParser";
 import { parseOutline } from "@/core/outlineParser";
 import { scrollSpyPlugin } from "@/cmScrollSpy";
@@ -177,9 +176,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     return () => worker.removeEventListener('message', onMessage);
   }, [markdown, bus]);
 
-  const { htmlToMarkdown } = usePasteToMarkdown();
-  const htmlToMdRef = useRef(htmlToMarkdown);
-  useEffect(() => { htmlToMdRef.current = htmlToMarkdown; }, [htmlToMarkdown]);
 
 
   useEffect(() => {
@@ -321,12 +317,72 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             const html = cb.getData("text/html");
             if (!html) return false;
             event.preventDefault();
-            const md = htmlToMdRef.current(html);
-            const sel = view.state.selection.main;
-            view.dispatch({
-              changes: { from: sel.from, to: sel.to, insert: md },
-              selection: EditorSelection.cursor(sel.from + md.length),
-            });
+
+            (async () => {
+              try {
+                const { default: TurndownService } = await import('turndown');
+                const td = new TurndownService({ headingStyle: 'atx' });
+
+                td.addRule('fontSizeHeadingsPxPt', {
+                  filter: (node: Node) => {
+                    if (!(node instanceof HTMLElement)) return false;
+                    if (node.nodeName !== 'P') return false;
+                    const style = (node as HTMLElement).getAttribute('style') || '';
+                    return /font-size\s*:\s*\d+(?:\.\d+)?(px|pt)/i.test(style);
+                  },
+                  replacement: (content: string, node: Node) => {
+                    const style = (node as HTMLElement).getAttribute('style') || '';
+                    const m = style.match(/font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)/i);
+                    const value = m ? parseFloat(m[1]) : 0;
+                    const unit = m ? m[2].toLowerCase() : 'px';
+                    const px = unit === 'pt' ? value * (96 / 72) : value;
+                    let hashes = '';
+                    if (px >= 28) hashes = '#';
+                    else if (px >= 20) hashes = '##';
+                    else if (px >= 16) hashes = '###';
+                    if (hashes) return `\n${hashes} ${content.trim()}\n\n`;
+                    return `\n\n${content}\n\n`;
+                  },
+                });
+                td.addRule('dropStrong', {
+                  filter: (node: Node) => node && (node.nodeName === 'STRONG' || node.nodeName === 'B'),
+                  replacement: (content: string) => content,
+                });
+                td.addRule('dropEmphasis', {
+                  filter: (node: Node) => node && (node.nodeName === 'EM' || node.nodeName === 'I'),
+                  replacement: (content: string) => content,
+                });
+                td.addRule('dropBoldStyleSpans', {
+                  filter: (node: Node) => {
+                    if (!(node instanceof HTMLElement)) return false;
+                    const style = (node as HTMLElement).getAttribute('style') || '';
+                    return /font-weight\s*:\s*(bold|[6-9]00)/i.test(style);
+                  },
+                  replacement: (content: string) => content,
+                });
+
+                const md = td
+                  .turndown(html)
+                  .replace(/^\*\*(.+)\*\*$/gm, '$1')
+                  .replace(/^\*(.+)\*$/gm, '$1');
+
+                const sel = view.state.selection.main;
+                view.dispatch({
+                  changes: { from: sel.from, to: sel.to, insert: md },
+                  selection: EditorSelection.cursor(sel.from + md.length),
+                });
+              } catch (error) {
+                console.error('Failed to load Turndown:', error);
+                // Fallback: insert plain text
+                const text = cb.getData("text/plain") || html;
+                const sel = view.state.selection.main;
+                view.dispatch({
+                  changes: { from: sel.from, to: sel.to, insert: text },
+                  selection: EditorSelection.cursor(sel.from + text.length),
+                });
+              }
+            })();
+
             return true;
           }
         })
