@@ -1,5 +1,5 @@
-import React, { useRef, useState, useLayoutEffect } from 'react';
-import type { Heading } from '../core/outlineParser';
+import React from 'react';
+import type { Heading } from '@/core/outlineParser';
 
 type OutlineItemProps = { 
   item: Heading;
@@ -7,27 +7,9 @@ type OutlineItemProps = {
 };
 
 function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
-  // Deeper levels indent a bit more tightly after H3
   const indentPx = item.level <= 3 ? (item.level - 1) * 10 : 20 + (item.level - 3) * 8;
-  // Make H4–H6 a tad smaller so the hierarchy reads well
   const fontSize = item.level <= 3 ? 13 : 12;
   const accentOpacity = item.level <= 3 ? 1 : 0.7;
-
-  const textRef = useRef<HTMLSpanElement | null>(null);
-  const [isTruncated, setIsTruncated] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = textRef.current;
-    if (!el) return;
-    const check = () => {
-      const truncated = el.scrollWidth > el.clientWidth;
-      setIsTruncated(truncated);
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [item.text]);
 
   return (
     <div
@@ -41,7 +23,7 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
         display: 'flex',
         alignItems: 'baseline',
         gap: 4,
-        minWidth: 0, // Allow container to shrink below content width
+        minWidth: 0,
         fontWeight: isActive ? 600 : 400,
         borderLeft: isActive ? '3px solid #6b7280' : '3px solid transparent',
         transition: 'all 0.2s ease',
@@ -52,19 +34,13 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
         H{item.level}
       </span>
       <span 
-        ref={textRef}
         style={{ 
           fontWeight: 500, 
           whiteSpace: 'nowrap', 
           overflow: 'hidden', 
           textOverflow: 'ellipsis',
           flex: '1 1 auto',
-          minWidth: 0,
-          // Apply fade only when truncated
-          ...(isTruncated && {
-            WebkitMaskImage: 'linear-gradient(to right, black 0%, black 85%, transparent 100%)',
-            maskImage: 'linear-gradient(to right, black 0%, black 85%, transparent 100%)',
-          })
+          minWidth: 0
         }}
       >
         {item.text}
