@@ -117,7 +117,8 @@ export const OutlinePane = React.memo(function OutlinePane({
   }, [outline]);
 
   const visible = useMemo(() => computeVisible(outline, collapsed), [outline, collapsed]);
-  const useVirtual = visible.length >= VIRTUAL_THRESHOLD;
+  // Base virtualization on total outline size, not current visibility, to avoid switching modes (which resets scroll)
+  const useVirtual = outline.length >= VIRTUAL_THRESHOLD;
   
   const idToIdx = useMemo(() => {
     const m = new Map<string, number>();
@@ -136,8 +137,16 @@ export const OutlinePane = React.memo(function OutlinePane({
     let scrollTimeout: number | undefined;
     
     const off = bus.on('outline:active', ({ id, source }) => {
-      const i = id ? (idToIdx.get(id) ?? 0) : 0;
-      setFocusIdx(i);
+      // Resolve to a visible target: if the active id is hidden (collapsed), use nearest visible ancestor
+      let targetId: string | null = id ?? null;
+      if (targetId && !idToIdx.has(targetId)) {
+        targetId = nearestCollapsedAncestorId(outline, targetId, collapsed) ?? targetId;
+      }
+
+      const idx = targetId != null ? idToIdx.get(targetId) : undefined;
+      if (typeof idx === 'number') {
+        setFocusIdx(idx);
+      }
       
       // Clear any pending scroll operations to prevent jumping
       if (scrollTimeout) {
@@ -148,8 +157,10 @@ export const OutlinePane = React.memo(function OutlinePane({
       // Handle scrolling for all modes and sources
       if (useVirtual) {
         // Soft follow for scroll; full ensure for keyboard/click
-        const bandRows = source === 'scroll' ? 3 : 0; // 0 = nearest behavior
-        listRef.current?.ensureVisible(i, { bandRows });
+        if (typeof idx === 'number') {
+          const bandRows = source === 'scroll' ? 3 : 0; // 0 = nearest behavior
+          listRef.current?.ensureVisible(idx, { bandRows });
+        }
       } else {
         // Non-virtual mode: debounce scroll events to reduce jumping
         const forceScroll = source === 'click' || source === 'keyboard';
@@ -159,7 +170,7 @@ export const OutlinePane = React.memo(function OutlinePane({
           // Find the correct scrollable container - the inner .outline-scroll div
           const outerContainer = scrollRef.current;
           const container = outerContainer?.querySelector('.outline-scroll') as HTMLElement || outerContainer;
-          const targetElement = document.getElementById(`toc-${id}`);
+          const targetElement = targetId ? document.getElementById(`toc-${targetId}`) : null;
           if (container && targetElement) {
             const itemTop = targetElement.offsetTop;
             const itemBottom = itemTop + targetElement.offsetHeight;
@@ -191,7 +202,7 @@ export const OutlinePane = React.memo(function OutlinePane({
       off();
       if (scrollTimeout) clearTimeout(scrollTimeout);
     };
-  }, [bus, idToIdx, useVirtual]);
+  }, [bus, idToIdx, useVirtual, outline, collapsed]);
   
   // Polite auto-scroll for non-virtual mode
   const userScrollUntil = useRef(0);
