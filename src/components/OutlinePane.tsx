@@ -383,6 +383,7 @@ export const OutlinePane = React.memo(function OutlinePane({
                   aria-level={h.level}
                   aria-selected={isActive}
                   aria-expanded={canFold ? !isFolded : undefined}
+                  aria-current={isActive ? 'true' : undefined}
                   tabIndex={isFocusable ? 0 : -1}
                   onKeyDown={(e) => onRowKeyDown(e, i, h, canFold, isFolded)}
                   onFocus={() => setFocusIdx(i)}
@@ -444,6 +445,7 @@ export const OutlinePane = React.memo(function OutlinePane({
                   aria-level={h.level}
                   aria-selected={isActive}
                   aria-expanded={canFold ? !isFolded : undefined}
+                  aria-current={isActive ? 'true' : undefined}
                   tabIndex={isFocusable ? 0 : -1}
                   onKeyDown={(e) => onRowKeyDown(e, i, h, canFold, isFolded)}
                   onFocus={() => setFocusIdx(i)}
