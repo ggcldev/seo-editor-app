@@ -131,7 +131,7 @@ export const OutlinePane = React.memo(function OutlinePane({
     return nearestCollapsedAncestorId(outline, activeHeadingId, collapsed) ?? activeHeadingId;
   }, [outline, activeHeadingId, collapsed]);
 
-  // Soft follow for active heading changes with conservative scrolling
+  // Soft follow for active heading changes with balanced scrolling
   useEffect(() => {
     let scrollTimeout: number | undefined;
     
@@ -145,43 +145,52 @@ export const OutlinePane = React.memo(function OutlinePane({
         scrollTimeout = undefined;
       }
       
-      // Only scroll the outline view for intentional user actions, not continuous scroll events
-      const shouldScrollOutline = source === 'click' || source === 'keyboard';
+      // Differentiate between scroll events and user interactions
+      const isUserAction = source === 'click' || source === 'keyboard';
+      const isScrollEvent = source === 'scroll';
       
       // Handle scrolling for all modes and sources
       if (useVirtual) {
-        if (shouldScrollOutline) {
-          // Only ensure visibility for deliberate user actions
+        if (isUserAction) {
+          // For user actions: ensure full visibility
           listRef.current?.ensureVisible(i, { bandRows: 0 });
+        } else if (isScrollEvent) {
+          // For scroll events: gentle following with larger band
+          listRef.current?.ensureVisible(i, { bandRows: 2 });
         }
       } else {
-        if (shouldScrollOutline) {
-          // Non-virtual mode: only scroll for clicks/keyboard, not scroll events
-          const delay = 50;
-          
-          scrollTimeout = window.setTimeout(() => {
-            // Find the correct scrollable container - the inner .outline-scroll div
-            const outerContainer = scrollRef.current;
-            const container = outerContainer?.querySelector('.outline-scroll') as HTMLElement || outerContainer;
-            const targetElement = document.getElementById(`toc-${id}`);
-            if (container && targetElement) {
-              const itemTop = targetElement.offsetTop;
-              const itemBottom = itemTop + targetElement.offsetHeight;
-              const viewTop = container.scrollTop;
-              const viewBottom = viewTop + container.clientHeight;
-              const margin = 32; // Larger margin to be less aggressive
-  
-              // Only scroll if the item is significantly outside the viewport
+        // Non-virtual mode: different strategies for different event types
+        const delay = isUserAction ? 50 : 200; // Longer delay for scroll events
+        
+        scrollTimeout = window.setTimeout(() => {
+          // Find the correct scrollable container - the inner .outline-scroll div
+          const outerContainer = scrollRef.current;
+          const container = outerContainer?.querySelector('.outline-scroll') as HTMLElement || outerContainer;
+          const targetElement = document.getElementById(`toc-${id}`);
+          if (container && targetElement) {
+            const itemTop = targetElement.offsetTop;
+            const itemBottom = itemTop + targetElement.offsetHeight;
+            const viewTop = container.scrollTop;
+            const viewBottom = viewTop + container.clientHeight;
+            
+            if (isUserAction) {
+              // For user clicks: ensure visibility with reasonable margin
+              const margin = 24;
               if (itemTop < viewTop + margin || itemBottom > viewBottom - margin) {
                 const scrollTop = Math.max(0, itemTop - margin);
-                
-                // Gentle scroll behavior for better UX
+                container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+              }
+            } else if (isScrollEvent) {
+              // For scroll events: only scroll if item is completely out of view
+              const margin = 64; // Much larger margin to be very conservative
+              if (itemTop < viewTop || itemBottom > viewBottom) {
+                const scrollTop = Math.max(0, itemTop - margin);
                 container.scrollTo({ top: scrollTop, behavior: 'smooth' });
               }
             }
-            scrollTimeout = undefined;
-          }, delay);
-        }
+          }
+          scrollTimeout = undefined;
+        }, delay);
       }
     });
     
