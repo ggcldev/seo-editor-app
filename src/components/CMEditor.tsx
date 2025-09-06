@@ -146,16 +146,18 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
   
-  // Initialize/cleanup the worker once
-  useEffect(() => {
-    outlineWorkerRef.current = new Worker(new URL('../workers/outlineWorker.ts', import.meta.url), { type: 'module' });
-    return () => { outlineWorkerRef.current?.terminate(); outlineWorkerRef.current = null; };
-  }, []);
-
   useEffect(() => {
     const md = markdown;
     const bigDoc = md.length >= 50000; // threshold; tune as needed
-    if (!bigDoc || !outlineWorkerRef.current) {
+
+    // Lazy-create the worker only when needed
+    if (bigDoc && !outlineWorkerRef.current) {
+      outlineWorkerRef.current = new Worker(new URL('../workers/outlineWorker.ts', import.meta.url), { type: 'module' });
+    }
+
+    const worker = outlineWorkerRef.current;
+
+    if (!bigDoc || !worker) {
       const outline = computeOutlineFromDoc(md);
       outlineRef.current = outline;
       indexCacheRef.current = null;
@@ -163,7 +165,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
       return;
     }
 
-    const worker = outlineWorkerRef.current;
     const onMessage = (e: MessageEvent<Heading[]>) => {
       outlineRef.current = e.data ?? [];
       indexCacheRef.current = null;
@@ -467,6 +468,11 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bus]); // init once + bus
+
+  // Worker cleanup on unmount
+  useEffect(() => {
+    return () => { outlineWorkerRef.current?.terminate(); outlineWorkerRef.current = null; };
+  }, []);
 
   // Reconfigure highlight ON/OFF without rebuilding the editor
   useEffect(() => {
