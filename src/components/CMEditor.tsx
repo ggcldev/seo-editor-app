@@ -267,7 +267,8 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           // After changes or cursor moves, update active heading from caret when user-driven
           if ((u.docChanged || u.selectionSet) && !isProgrammaticSelect) {
             const caret = u.state.selection.main.head;
-            const index = new OutlineIndex(outlineRef.current.map(h => ({ id: h.id, pos: h.offset })));
+            // Use a stable "at or before" lookup to avoid jumping between headings while typing
+            const index = new OutlineIndex(outlineRef.current);
             const nextId = index.idAtOrBefore(caret);
             if (nextId && nextId !== lastActiveIdRef.current) {
               lastActiveIdRef.current = nextId;
