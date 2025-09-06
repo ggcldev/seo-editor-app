@@ -118,6 +118,16 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   const prevDocRef = useRef<string>(markdown);
   const scrollSpyRef = useRef<{ suppress: (ms?: number) => void } | null>(null);
   const lastActiveIdRef = useRef<string | null>(null);
+  const indexCacheRef = useRef<{ outline: Heading[]; index: OutlineIndex } | null>(null);
+  
+  function getOutlineIndex(): OutlineIndex {
+    const outline = outlineRef.current;
+    const cached = indexCacheRef.current;
+    if (cached && cached.outline === outline) return cached.index;
+    const idx = new OutlineIndex(outline);
+    indexCacheRef.current = { outline, index: idx };
+    return idx;
+  }
   
   // Create scroll spy plugin instance once
   const scrollSpy = useMemo(() => scrollSpyPlugin(
@@ -138,6 +148,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
   useEffect(() => {
     const outline = computeOutlineFromDoc(markdown);
     outlineRef.current = outline;
+    indexCacheRef.current = null; // Invalidate cache when outline changes
     // EventBus: publish outline snapshot
     bus.emit('outline:computed', { headings: outline, version: Date.now() });
   }, [markdown, bus]);
@@ -259,6 +270,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             // updateOutlineIncremental: returns `prev` if nothing moved; new array otherwise.
             if (prev !== next) {
               outlineRef.current = next;
+              indexCacheRef.current = null; // Invalidate cache when outline changes
               // EventBus: emit updated outline
               bus.emit('outline:computed', { headings: next, version: Date.now() });
             }
@@ -268,7 +280,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           if ((u.docChanged || u.selectionSet) && !isProgrammaticSelect) {
             const caret = u.state.selection.main.head;
             // Use a stable "at or before" lookup to avoid jumping between headings while typing
-            const index = new OutlineIndex(outlineRef.current);
+            const index = getOutlineIndex();
             const nextId = index.idAtOrBefore(caret);
             if (nextId && nextId !== lastActiveIdRef.current) {
               lastActiveIdRef.current = nextId;
