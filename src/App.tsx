@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { OutlinePane } from '@/components/OutlinePane';
 import { CMEditor, type CMHandle } from '@/components/CMEditor';
 import { MetricsBar } from '@/components/MetricsBar';
+import { MetricsErrorBoundary } from '@/components/MetricsErrorBoundary';
+import { OutlineErrorBoundary } from '@/components/OutlineErrorBoundary';
+import { EditorErrorBoundary } from '@/components/EditorErrorBoundary';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { normalizeEOL } from '@/utils/eol';
 import { BusProvider } from '@/core/BusContext';
 import '@/styles/globals.css';
@@ -138,7 +142,8 @@ Final deep content.`);
    * - Synchronous JavaScript errors
    */
   return (
-    <BusProvider>
+    <AppErrorBoundary>
+      <BusProvider>
       <div
         ref={shellRef}
         className="editor-shell"
@@ -149,28 +154,35 @@ Final deep content.`);
           height: '100vh'
         }}
       >
-      <OutlinePane
-        onStartResize={onStartResize}
-        onBumpWidth={(d) => {
-          setOutlineWidth(prev => Math.min(Math.max(prev + d, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
-        }}
-      />
+      <OutlineErrorBoundary>
+        <OutlinePane
+          onStartResize={onStartResize}
+          onBumpWidth={(d) => {
+            setOutlineWidth(prev => Math.min(Math.max(prev + d, OUTLINE_CONFIG.MIN_WIDTH), OUTLINE_CONFIG.MAX_WIDTH));
+          }}
+        />
+      </OutlineErrorBoundary>
 
       <div style={{ position: 'relative' }}>
-        <MetricsBar markdown={markdown} />
-        <CMEditor
-          ref={cmRef}
-          markdown={markdown}
-          setMarkdown={setMarkdown}
-          onCaretChange={() => {}}
-          narrow={narrow}
-          toggleNarrow={toggleNarrow}
-          highlightOn={highlightOn}
-          toggleHighlight={toggleHighlight}
-          onReady={() => {}}
-        />
+        <MetricsErrorBoundary>
+          <MetricsBar markdown={markdown} />
+        </MetricsErrorBoundary>
+        <EditorErrorBoundary>
+          <CMEditor
+            ref={cmRef}
+            markdown={markdown}
+            setMarkdown={setMarkdown}
+            onCaretChange={() => {}}
+            narrow={narrow}
+            toggleNarrow={toggleNarrow}
+            highlightOn={highlightOn}
+            toggleHighlight={toggleHighlight}
+            onReady={() => {}}
+          />
+        </EditorErrorBoundary>
       </div>
       </div>
-    </BusProvider>
+      </BusProvider>
+    </AppErrorBoundary>
   );
 }
