@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { OutlinePane } from './components/OutlinePane';
-import { CMEditor, type CMHandle } from './components/CMEditor';
-import { MetricsBar } from './components/MetricsBar';
-import { normalizeEOL } from './utils/eol';
-import { BusProvider } from './core/BusContext';
-import './styles/globals.css';
+import { OutlinePane } from '@/components/OutlinePane';
+import { CMEditor, type CMHandle } from '@/components/CMEditor';
+import { MetricsBar } from '@/components/MetricsBar';
+import { normalizeEOL } from '@/utils/eol';
+import { BusProvider } from '@/core/BusContext';
+import '@/styles/globals.css';
 
 const OUTLINE_CONFIG = {
   DEFAULT_WIDTH: 260,

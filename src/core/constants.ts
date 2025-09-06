@@ -1,0 +1,3 @@
+export const OUTLINE_ROW_HEIGHT_PX = 32;
+export const OUTLINE_INDENT_PX = 12;
+export const OUTLINE_VIRTUAL_THRESHOLD = 250;

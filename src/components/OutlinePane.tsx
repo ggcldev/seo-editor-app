@@ -1,12 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Heading } from '../core/outlineParser';
-import { OutlineItem } from './OutlineItem';
-import { useBus } from '../core/BusContext';
-import { VirtualList, type VirtualListHandle } from './VirtualList';
-
-const ROW_H = 32; // good tap target
-const INDENT_PX = 12; // px per heading level
-const VIRTUAL_THRESHOLD = 250; // turn on virtualization only for big docs
+import type { Heading } from '@/core/outlineParser';
+import { OutlineItem } from '@/components/OutlineItem';
+import { useBus } from '@/core/BusContext';
+import { VirtualList, type VirtualListHandle } from '@/components/VirtualList';
+import { OUTLINE_ROW_HEIGHT_PX, OUTLINE_INDENT_PX, OUTLINE_VIRTUAL_THRESHOLD } from '@/core/constants';
 
 
 const OUTLINE_STYLES = {
@@ -117,7 +114,7 @@ export const OutlinePane = React.memo(function OutlinePane({
   }, [outline]);
 
   const visible = useMemo(() => computeVisible(outline, collapsed), [outline, collapsed]);
-  const useVirtual = visible.length >= VIRTUAL_THRESHOLD;
+  const useVirtual = visible.length >= OUTLINE_VIRTUAL_THRESHOLD;
   
   const idToIdx = useMemo(() => {
     const m = new Map<string, number>();
@@ -365,7 +362,7 @@ export const OutlinePane = React.memo(function OutlinePane({
           <VirtualList
             ref={listRef}
             count={visible.length}
-            rowHeight={ROW_H}
+            rowHeight={OUTLINE_ROW_HEIGHT_PX}
             overscan={24}                           // base overscan
             // adaptiveOverscan={{ base: 24, max: 48, factor: 20 }} // temporarily disabled
             className="outline-scroll"
@@ -396,7 +393,7 @@ export const OutlinePane = React.memo(function OutlinePane({
                   className="outline-row"
                   style={{
                     ...itemStyle,
-                    paddingLeft: (h.level - 1) * INDENT_PX + 8,
+                    paddingLeft: (h.level - 1) * OUTLINE_INDENT_PX + 8,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -456,9 +453,9 @@ export const OutlinePane = React.memo(function OutlinePane({
                   }}
                   className="outline-row"
                   style={{
-                    height: ROW_H, 
-                    lineHeight: `${ROW_H}px`,
-                    paddingLeft: (h.level - 1) * INDENT_PX + 8,
+                    height: OUTLINE_ROW_HEIGHT_PX, 
+                    lineHeight: `${OUTLINE_ROW_HEIGHT_PX}px`,
+                    paddingLeft: (h.level - 1) * OUTLINE_INDENT_PX + 8,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",

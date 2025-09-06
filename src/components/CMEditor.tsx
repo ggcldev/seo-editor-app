@@ -3,13 +3,13 @@ import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirr
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
-import { usePasteToMarkdown } from "../hooks/usePasteToMarkdown";
-import type { Heading } from "../core/outlineParser";
-import { parseOutline } from "../core/outlineParser";
-import { scrollSpyPlugin } from "../cmScrollSpy";
-import { useBus } from "../core/BusContext";
-import { ScrollSync } from "../core/scrollSync";
-import { OutlineIndex } from "../core/outlineCore";
+import { usePasteToMarkdown } from "@/hooks/usePasteToMarkdown";
+import type { Heading } from "@/core/outlineParser";
+import { parseOutline } from "@/core/outlineParser";
+import { scrollSpyPlugin } from "@/cmScrollSpy";
+import { useBus } from "@/core/BusContext";
+import { ScrollSync } from "@/core/scrollSync";
+import { OutlineIndex } from "@/core/outlineCore";
 
 
 type Props = {
