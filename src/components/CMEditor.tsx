@@ -565,64 +565,76 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             onClick={toggleNarrow}
             style={{
               ...STYLES.button,
-              background: narrow ? "rgba(59, 130, 246, 0.9)" : "rgba(255, 255, 255, 0.9)",
+              background: narrow ? "rgba(55, 65, 81, 0.9)" : "rgba(255, 255, 255, 0.9)",
               color: narrow ? "#ffffff" : "#374151"
             }}
             onMouseEnter={(e) => {
               if (narrow) {
-                e.currentTarget.style.background = "rgba(59, 130, 246, 1)";
+                e.currentTarget.style.background = "rgba(55, 65, 81, 1)";
               } else {
                 e.currentTarget.style.background = "rgba(255, 255, 255, 1)";
-                e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
               }
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
             }}
             onMouseLeave={(e) => {
               if (narrow) {
-                e.currentTarget.style.background = "rgba(59, 130, 246, 0.9)";
+                e.currentTarget.style.background = "rgba(55, 65, 81, 0.9)";
               } else {
                 e.currentTarget.style.background = "rgba(255, 255, 255, 0.9)";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
               }
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
             }}
             aria-label={narrow ? "Switch to full width" : "Switch to narrow width"}
             aria-pressed={narrow}
+            title={narrow ? "Switch to full width" : "Switch to narrow width"}
           >
-            {narrow ? "Full width" : "Narrow width"}
+            {narrow ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M21 9v6M3 9v6"/>
+              </svg>
+            )}
           </button>
           <button
             type="button"
             onClick={toggleHighlight}
             style={{
               ...STYLES.button,
-              right: 120,
-              background: highlightOn ? "rgba(16, 185, 129, 0.9)" : "rgba(255, 255, 255, 0.9)",
+              right: 56,
+              background: highlightOn ? "rgba(55, 65, 81, 0.9)" : "rgba(255, 255, 255, 0.9)",
               color: highlightOn ? "#ffffff" : "#374151"
             }}
             onMouseEnter={(e) => {
               if (highlightOn) {
-                e.currentTarget.style.background = "rgba(16, 185, 129, 1)";
+                e.currentTarget.style.background = "rgba(55, 65, 81, 1)";
               } else {
                 e.currentTarget.style.background = "rgba(255, 255, 255, 1)";
-                e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
               }
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
             }}
             onMouseLeave={(e) => {
               if (highlightOn) {
-                e.currentTarget.style.background = "rgba(16, 185, 129, 0.9)";
+                e.currentTarget.style.background = "rgba(55, 65, 81, 0.9)";
               } else {
                 e.currentTarget.style.background = "rgba(255, 255, 255, 0.9)";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
               }
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
             }}
             aria-label={`Toggle active-line highlight (${highlightOn ? "on" : "off"})`}
             aria-pressed={highlightOn}
-            title="Toggle editor highlight (Ctrl/⌘+Alt+H)"
+            title={`Toggle editor highlight (${highlightOn ? "on" : "off"}) - Ctrl/⌘+Alt+H`}
           >
-            Highlight: {highlightOn ? "On" : "Off"}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m9 11-6 6v3h3l6-6"/>
+              <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>
+            </svg>
           </button>
           <div ref={hostRef} style={STYLES.editorHost} />
         </div>
