@@ -11,7 +11,7 @@ const OUTLINE_STYLES = {
   resizer: { position: 'absolute' as const, top: 0, right: -3, width: 6, height: '100%', cursor: 'col-resize', zIndex: 2 },
   container: { padding: 12, display: 'flex', flexDirection: 'column' as const, height: '100%' },
   titleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  title: { fontSize: 12, color: '#6b7280', fontWeight: 600 },
+  title: { fontSize: 12, color: '#6b7280', fontWeight: 600, WebkitFontSmoothing: 'antialiased' as const, MozOsxFontSmoothing: 'grayscale' as const },
   list: { display: 'grid', gap: 4 },
   foldBtn: {
     display: 'inline-flex',

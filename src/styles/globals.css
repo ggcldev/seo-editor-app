@@ -16,6 +16,9 @@
   line-height: 1;
   user-select: none;
   contain: paint;
+  font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Outline pane button styling */
@@ -29,6 +32,8 @@
   cursor: pointer;
   border-radius: 4px;
   line-height: 1.2;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .outline-muted-btn:hover {
@@ -91,6 +96,9 @@
 
 .outline-row { 
   font-size: 13px; 
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (prefers-reduced-motion: reduce) { 

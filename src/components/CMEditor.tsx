@@ -53,7 +53,9 @@ const STYLES = {
     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
     transition: "all 0.2s ease",
     fontWeight: 500,
-    boxSizing: "border-box" as const
+    boxSizing: "border-box" as const,
+    WebkitFontSmoothing: "antialiased" as const,
+    MozOsxFontSmoothing: "grayscale" as const
   },
   editorHost: { height: "calc(100vh - 48px)", width: "100%", paddingTop: 32, background: "#f6f6f6" }
 } as const;

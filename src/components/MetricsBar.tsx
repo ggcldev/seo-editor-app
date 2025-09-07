@@ -38,7 +38,7 @@ export const MetricsBar = memo(function MetricsBar({ markdown }: MetricsBarProps
         right: 0,
         backgroundColor: '#374151',
         color: '#d1d5db',
-        padding: '6px 16px',
+        padding: '10px 16px',
         zIndex: 1000,
         fontSize: '11px',
         fontFamily: 'ui-sans-serif, system-ui, sans-serif',
