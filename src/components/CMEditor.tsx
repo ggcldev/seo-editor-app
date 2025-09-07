@@ -35,7 +35,7 @@ const STYLES = {
   main: { padding: 0, background: "#f6f6f6", height: "100vh" },
   container: { height: "100%", padding: 24, boxSizing: "border-box" as const, display: "flex", justifyContent: "center" },
   wrapper: (narrow: boolean) =>
-    ({ position: "relative", width: "100%", maxWidth: narrow ? 760 : "100%", overflow: "hidden" } as const),
+    ({ position: "relative", width: "100%", maxWidth: narrow ? 680 : "100%", overflow: "hidden" } as const),
   button: {
     position: "absolute" as const,
     top: 8,
@@ -206,7 +206,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
             fontFamily:
               "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
             fontSize: "14px",
-            lineHeight: "1.8"
+            lineHeight: "1.6"
           },
           ".cm-cursor": {
             borderLeftWidth: "2px",
