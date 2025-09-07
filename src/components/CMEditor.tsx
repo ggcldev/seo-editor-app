@@ -42,12 +42,18 @@ const STYLES = {
     right: 8,
     zIndex: 1,
     fontSize: 12,
-    padding: "6px 10px",
-    borderRadius: 8,
-    border: "1px solid #e5e7eb",
-    background: "#ffffff",
+    padding: "6px 12px",
+    borderRadius: 6,
+    border: "0",
+    outline: "none",
+    background: "rgba(255, 255, 255, 0.9)",
     color: "#374151",
-    cursor: "pointer"
+    cursor: "pointer",
+    backdropFilter: "blur(8px)",
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+    transition: "all 0.2s ease",
+    fontWeight: 500,
+    boxSizing: "border-box" as const
   },
   editorHost: { height: "calc(100vh - 48px)", width: "100%", paddingTop: 32, background: "#f6f6f6" }
 } as const;
@@ -557,7 +563,29 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           <button
             type="button"
             onClick={toggleNarrow}
-            style={STYLES.button}
+            style={{
+              ...STYLES.button,
+              background: narrow ? "rgba(59, 130, 246, 0.9)" : "rgba(255, 255, 255, 0.9)",
+              color: narrow ? "#ffffff" : "#374151"
+            }}
+            onMouseEnter={(e) => {
+              if (narrow) {
+                e.currentTarget.style.background = "rgba(59, 130, 246, 1)";
+              } else {
+                e.currentTarget.style.background = "rgba(255, 255, 255, 1)";
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (narrow) {
+                e.currentTarget.style.background = "rgba(59, 130, 246, 0.9)";
+              } else {
+                e.currentTarget.style.background = "rgba(255, 255, 255, 0.9)";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
+              }
+            }}
             aria-label={narrow ? "Switch to full width" : "Switch to narrow width"}
             aria-pressed={narrow}
           >
@@ -566,7 +594,30 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           <button
             type="button"
             onClick={toggleHighlight}
-            style={{ ...STYLES.button, right: 120 }}
+            style={{
+              ...STYLES.button,
+              right: 120,
+              background: highlightOn ? "rgba(16, 185, 129, 0.9)" : "rgba(255, 255, 255, 0.9)",
+              color: highlightOn ? "#ffffff" : "#374151"
+            }}
+            onMouseEnter={(e) => {
+              if (highlightOn) {
+                e.currentTarget.style.background = "rgba(16, 185, 129, 1)";
+              } else {
+                e.currentTarget.style.background = "rgba(255, 255, 255, 1)";
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (highlightOn) {
+                e.currentTarget.style.background = "rgba(16, 185, 129, 0.9)";
+              } else {
+                e.currentTarget.style.background = "rgba(255, 255, 255, 0.9)";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
+              }
+            }}
             aria-label={`Toggle active-line highlight (${highlightOn ? "on" : "off"})`}
             aria-pressed={highlightOn}
             title="Toggle editor highlight (Ctrl/⌘+Alt+H)"

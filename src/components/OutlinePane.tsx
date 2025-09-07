@@ -7,7 +7,7 @@ import { OUTLINE_ROW_HEIGHT_PX, OUTLINE_INDENT_PX, OUTLINE_VIRTUAL_THRESHOLD } f
 
 
 const OUTLINE_STYLES = {
-  aside: { borderRight: '1px solid #e5e7eb', background: '#fff', overflowY: 'auto' as const, position: 'relative' as const },
+  aside: { border: 'none', background: '#fff', overflowY: 'auto' as const, position: 'relative' as const },
   resizer: { position: 'absolute' as const, top: 0, right: -3, width: 6, height: '100%', cursor: 'col-resize', zIndex: 2 },
   container: { padding: 12, display: 'flex', flexDirection: 'column' as const, height: '100%' },
   titleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },

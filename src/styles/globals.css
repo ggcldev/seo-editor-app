@@ -11,7 +11,7 @@
 /* Metrics bar styling */
 .metrics-bar {
   backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(229, 231, 235, 0.8);
+  border: none;
   font-size: 11px;
   line-height: 1;
   user-select: none;
@@ -62,6 +62,20 @@
   /* Override parent scrollbar hiding for virtual lists */
   scrollbar-width: auto !important;
   -ms-overflow-style: auto !important;
+}
+
+/* Remove any unexpected borders from CodeMirror */
+.cm-editor {
+  border: none !important;
+  outline: none !important;
+}
+
+.cm-content {
+  border: none !important;
+}
+
+.cm-scroller {
+  border: none !important;
 }
 
 .outline-scroll::-webkit-scrollbar {
