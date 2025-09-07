@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { OutlinePane } from '@/components/OutlinePane';
-import { CMEditor, type CMHandle } from '@/components/CMEditor';
+import { CMEditor } from '@/components/CMEditor';
 import { MetricsBar } from '@/components/MetricsBar';
 import { MetricsErrorBoundary } from '@/components/MetricsErrorBoundary';
 import { OutlineErrorBoundary } from '@/components/OutlineErrorBoundary';
@@ -64,7 +64,6 @@ Final deep content.`);
   const [isResizing, setIsResizing] = useState(false);
 
   const shellRef = useRef<HTMLDivElement>(null);
-  const cmRef = useRef<CMHandle>(null);
   const resizeRaf = useRef<number | null>(null);
 
 
@@ -169,7 +168,6 @@ Final deep content.`);
         </MetricsErrorBoundary>
         <EditorErrorBoundary>
           <CMEditor
-            ref={cmRef}
             markdown={markdown}
             setMarkdown={setMarkdown}
             onCaretChange={() => {}}

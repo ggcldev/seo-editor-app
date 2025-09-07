@@ -3,7 +3,7 @@ import { ViewPlugin, ViewUpdate } from "@codemirror/view";
 import type { Heading } from "./core/outlineParser";
 
 type GetOutline = () => Heading[];
-type OnActive = (id: string | null, source: 'scroll') => void;
+type OnActive = (id: string | null, source: 'scroll' | 'outline' | 'click' | 'keyboard') => void;
 
 export function scrollSpyPlugin(
   getOutline: GetOutline,
@@ -49,7 +49,7 @@ export function scrollSpyPlugin(
         const coords = { x: rect.left + 12, y: anchorY };
 
         const res = view.posAtCoords(coords);
-        if (!res) return outline[0].id;
+        if (res == null) return outline[0].id;
         const anchorPos = res;
 
         // headings[] must be sorted by offset (doc position) ascending

@@ -565,29 +565,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           <button
             type="button"
             onClick={toggleNarrow}
-            style={{
-              ...STYLES.button,
-              background: narrow ? "rgba(55, 65, 81, 0.9)" : "rgba(255, 255, 255, 0.9)",
-              color: narrow ? "#ffffff" : "#374151"
-            }}
-            onMouseEnter={(e) => {
-              if (narrow) {
-                e.currentTarget.style.background = "rgba(55, 65, 81, 1)";
-              } else {
-                e.currentTarget.style.background = "rgba(255, 255, 255, 1)";
-              }
-              e.currentTarget.style.transform = "translateY(-1px)";
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
-            }}
-            onMouseLeave={(e) => {
-              if (narrow) {
-                e.currentTarget.style.background = "rgba(55, 65, 81, 0.9)";
-              } else {
-                e.currentTarget.style.background = "rgba(255, 255, 255, 0.9)";
-              }
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
-            }}
+            className={`editor-action-btn ${narrow ? 'bg-gray-700 text-white' : 'bg-white text-gray-700'}`}
             aria-label={narrow ? "Switch to full width" : "Switch to narrow width"}
             aria-pressed={narrow}
             title={narrow ? "Switch to full width" : "Switch to narrow width"}
@@ -605,30 +583,7 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
           <button
             type="button"
             onClick={toggleHighlight}
-            style={{
-              ...STYLES.button,
-              right: 56,
-              background: highlightOn ? "rgba(55, 65, 81, 0.9)" : "rgba(255, 255, 255, 0.9)",
-              color: highlightOn ? "#ffffff" : "#374151"
-            }}
-            onMouseEnter={(e) => {
-              if (highlightOn) {
-                e.currentTarget.style.background = "rgba(55, 65, 81, 1)";
-              } else {
-                e.currentTarget.style.background = "rgba(255, 255, 255, 1)";
-              }
-              e.currentTarget.style.transform = "translateY(-1px)";
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
-            }}
-            onMouseLeave={(e) => {
-              if (highlightOn) {
-                e.currentTarget.style.background = "rgba(55, 65, 81, 0.9)";
-              } else {
-                e.currentTarget.style.background = "rgba(255, 255, 255, 0.9)";
-              }
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
-            }}
+            className={`editor-action-btn editor-action-btn--secondary ${highlightOn ? 'bg-gray-700 text-white' : 'bg-white text-gray-700'}`}
             aria-label={`Toggle active-line highlight (${highlightOn ? "on" : "off"})`}
             aria-pressed={highlightOn}
             title={`Toggle editor highlight (${highlightOn ? "on" : "off"}) - Ctrl/⌘+Alt+H`}

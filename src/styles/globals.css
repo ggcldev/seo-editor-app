@@ -4,6 +4,33 @@
   contain: layout paint size; 
 }
 
+/* Reusable editor action button styles */
+.editor-action-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 0;
+  outline: none;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.editor-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.editor-action-btn--secondary { 
+  right: 56px; 
+}
+
 .outline-pane { 
   contain: layout paint; 
 }
