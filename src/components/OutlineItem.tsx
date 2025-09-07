@@ -17,15 +17,14 @@ function OutlineItemBase({ item, isActive = false }: OutlineItemProps) {
         padding: '4px 6px',
         borderRadius: 8,
         marginLeft: indentPx,
-        color: isActive ? '#ffffff' : '#374151',
+        color: isActive ? '#374151' : '#374151',
         fontSize,
-        background: isActive ? '#374151' : 'transparent',
+        background: 'transparent',
         display: 'flex',
         alignItems: 'baseline',
         gap: 4,
         minWidth: 0,
         fontWeight: isActive ? 600 : 400,
-        borderLeft: isActive ? '3px solid #6b7280' : '3px solid transparent',
         transition: 'all 0.2s ease',
       }}
       title={item.text}
