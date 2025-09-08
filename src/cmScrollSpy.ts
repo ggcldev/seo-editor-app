@@ -15,13 +15,8 @@ export function scrollSpyPlugin(
   // Viewport anchor as a fraction of height
   const frac = bias === "top" ? 0 : bias === "center" ? 0.5 : 0.33;
 
-  // Public handle we keep to call suppress() from React
-  type SpyInstance = {
-    suppress: (ms?: number) => void;
-  };
-
-  // Make it nullable and well-typed to avoid 'never'
-  let pluginInstance: SpyInstance | null = null;
+  // Per-view instances for multi-editor support
+  const viewInstances = new WeakMap<any, { suppress: (ms?: number) => void }>();
 
   const plugin = ViewPlugin.define(view => {
     let lastActiveId: string | null = null;
@@ -134,14 +129,15 @@ export function scrollSpyPlugin(
       }
     };
 
-    pluginInstance = instance;
+    // Store instance per view for multi-editor support
+    viewInstances.set(view, instance);
     return instance;
   });
 
   return {
     plugin,
-    suppress: (ms: number = 900) => {
-      pluginInstance?.suppress(ms);
+    suppress: (view: any, ms: number = 900) => {
+      viewInstances.get(view)?.suppress(ms);
     }
   };
 }

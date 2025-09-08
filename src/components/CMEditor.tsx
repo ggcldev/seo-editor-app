@@ -231,7 +231,7 @@ export const CMEditor = function CMEditor(
             const userSelect = u.transactions.some(t => t.isUserEvent("select"));
             if (userSelect) {
               // Suppress the scroll spy plugin to prevent conflicts
-              scrollSpy.suppress(300); // Suppress for 300ms to avoid conflicting events
+              scrollSpyRef.current?.suppress(300); // Suppress for 300ms to avoid conflicting events
               
               // Confirm caret is on a heading line
               const docStr = u.state.doc.toString();
@@ -401,8 +401,8 @@ export const CMEditor = function CMEditor(
     // Initialize ScrollSync
     scrollSyncRef.current = new ScrollSync(view);
 
-    // Expose scroll spy suppression via EventBus only
-    scrollSpyRef.current = scrollSpy;
+    // Expose per-view suppression to React via a stable handle
+    scrollSpyRef.current = { suppress: (ms?: number) => scrollSpy.suppress(view, ms ?? 900) };
 
     // Helper: Caret just after visible heading text (same logic as old App.tsx)
     function caretAtHeadingEnd(doc: string, heading: { offset: number }) {

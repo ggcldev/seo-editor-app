@@ -204,7 +204,8 @@ export const OutlinePane = React.memo(function OutlinePane({
 
   useEffect(() => {
     if (useVirtual) return; // Skip for virtual mode
-    const el = scrollRef.current;
+    const outer = scrollRef.current;
+    const el = (outer?.querySelector('.outline-scroll') as HTMLElement) ?? outer;
     if (!el) return;
 
     const passiveCaptureFalse: AddEventListenerOptions = { passive: true, capture: false };
@@ -433,7 +434,7 @@ export const OutlinePane = React.memo(function OutlinePane({
             }}
           </VirtualList>
         ) : (
-          <div role="tree" aria-label="Document outline" className="outline-scroll" style={{ overflow: "auto", height: "100%", contain: "content", overflowAnchor: "none" }}>
+          <div className="outline-scroll" style={{ overflow: "auto", height: "100%", contain: "content", overflowAnchor: "none" }}>
             {visible.map((h, i) => {
               const isActive = h.id === displayActiveId;
               const canFold = !!hasChild.get(h.id);

@@ -23,7 +23,7 @@ export function parseOutline(markdownInput: string): Heading[] {
   const len = markdown.length;
 
   let i = 0;
-  let inFence: null | { fence: string } = null;
+  let inFence: null | { char: '`' | '~'; len: number } = null;
 
   while (i <= len) {
     // Find end of current line
@@ -38,10 +38,18 @@ export function parseOutline(markdownInput: string): Heading[] {
     if (fenceMatch) {
       if (!inFence) {
         // Opening fence - start ignoring heading markers
-        inFence = { fence: fenceMatch[2] };
-      } else if (line.startsWith(inFence.fence)) {
-        // Closing fence - resume parsing headings
-        inFence = null;
+        const fenceStr = fenceMatch[2];
+        inFence = { char: (fenceStr[0] as '`' | '~'), len: fenceStr.length };
+      } else {
+        // Allow closing fence with leading spaces and length >= opening
+        const trimmed = line.trimStart();
+        const closeMatch = trimmed.match(/^(`{3,}|~{3,})/);
+        if (closeMatch) {
+          const closeStr = closeMatch[1];
+          if (closeStr[0] === inFence.char && closeStr.length >= inFence.len) {
+            inFence = null;
+          }
+        }
       }
       i = lineEnd + 1; // Skip to next line
       continue;

@@ -217,5 +217,24 @@ Final content`
       expect(result[0].id).toBeDefined()
       expect(result[1].id).toBeDefined()
     })
+
+    test('handles indented closing code fences', () => {
+      const markdown = `# Before Code
+
+\`\`\`javascript
+# This should not be a heading
+function test() {
+    return true;
+}
+  \`\`\` 
+
+# After Code`
+      
+      const result = parseOutline(markdown)
+      
+      expect(result).toHaveLength(2)
+      expect(result[0].text).toBe('Before Code')
+      expect(result[1].text).toBe('After Code')
+    })
   })
 })
