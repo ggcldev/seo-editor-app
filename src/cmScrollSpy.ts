@@ -1,5 +1,6 @@
 // cmScrollSpy.ts
 import { ViewPlugin, ViewUpdate } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import type { Heading } from "./core/outlineParser";
 
 export function isNullish<T>(v: T | null | undefined): v is null | undefined { return v == null; }
@@ -15,10 +16,10 @@ export function scrollSpyPlugin(
   // Viewport anchor as a fraction of height
   const frac = bias === "top" ? 0 : bias === "center" ? 0.5 : 0.33;
 
-  // Per-view instances for multi-editor support
-  const viewInstances = new WeakMap<any, { suppress: (ms?: number) => void }>();
+  // Track per-view instances so suppress() is scoped to the right editor
+  const instances = new WeakMap<EditorView, { suppress: (ms?: number) => void }>();
 
-  const plugin = ViewPlugin.define(view => {
+  const plugin = ViewPlugin.define((view: EditorView) => {
     let lastActiveId: string | null = null;
     let lastSwitchAt = 0;
     let suppressedUntil = 0;
@@ -126,18 +127,18 @@ export function scrollSpyPlugin(
         }
         if (raf) cancelAnimationFrame(raf);
         if (settleTimer) clearTimeout(settleTimer);
+        instances.delete(view);
       }
     };
 
-    // Store instance per view for multi-editor support
-    viewInstances.set(view, instance);
+    instances.set(view, { suppress: (ms?: number) => instance.suppress(ms) });
     return instance;
   });
 
   return {
     plugin,
-    suppress: (view: any, ms: number = 900) => {
-      viewInstances.get(view)?.suppress(ms);
+    suppress: (view: EditorView, ms: number = 900) => {
+      instances.get(view)?.suppress(ms);
     }
   };
 }

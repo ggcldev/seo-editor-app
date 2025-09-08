@@ -24,7 +24,6 @@ A modern web-based Markdown editor built with React, TypeScript, and CodeMirror 
 - **EventBus** (`src/core/eventBus.ts`) - Typed event system for decoupled communication
 - **OutlineIndex** (`src/core/outlineCore.ts`) - O(1) heading lookups with binary search
 - **ScrollSync** (`src/core/scrollSync.ts`) - Target-aware scroll suppression
-- **Worker RPC** (`src/core/rpc.ts`) - Versioned worker communication protocol
 
 ### Event System
 
@@ -51,8 +50,7 @@ src/
     ├── eventBus.ts    # Typed event system
     ├── BusContext.tsx # React Context wrapper
     ├── outlineCore.ts # O(1) outline operations
-    ├── scrollSync.ts  # Target-aware suppression
-    └── rpc.ts         # Worker RPC protocol
+    └── scrollSync.ts  # Target-aware suppression
 ```
 
 ## Getting Started
