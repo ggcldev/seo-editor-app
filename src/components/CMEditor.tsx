@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
@@ -25,11 +25,6 @@ type Props = {
 // Tag programmatic selections (e.g., outline clicks) so selection observers can ignore them
 const ProgrammaticSelect = Annotation.define<boolean>();
 
-export type CMHandle = {
-  setSelectionAt(pos: number): void;
-  scrollToOffsetExact(pos: number, bias?: "top" | "center" | "third"): void;
-  getView(): EditorView | null;
-};
 
 const STYLES = {
   main: { padding: 0, background: "#f6f6f6", height: "100vh" },
@@ -100,9 +95,8 @@ function updateOutlineIncremental(
 }
 
 
-export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
-  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady },
-  ref
+export const CMEditor = function CMEditor(
+  { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady }: Props
 ) {
   const bus = useBus();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -535,27 +529,6 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
     }
   }, [markdown]);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      setSelectionAt(pos: number) {
-        const view = viewRef.current;
-        if (!view) return;
-        view.dispatch({ 
-          selection: EditorSelection.cursor(pos),
-          annotations: ProgrammaticSelect.of(true)
-        });
-        view.focus();
-      },
-      scrollToOffsetExact(pos: number, bias: "top" | "center" | "third" = "third") {
-        const y = bias === "top" ? "start" : "center";
-        viewRef.current?.dispatch({ effects: EditorView.scrollIntoView(pos, { y }) });
-      },
-      getView() { return viewRef.current; }
-    }),
-    []
-  );
-
   const wrapperStyle = useMemo(() => STYLES.wrapper(narrow), [narrow]);
 
   return (
@@ -598,4 +571,4 @@ export const CMEditor = React.forwardRef<CMHandle, Props>(function CMEditor(
       </div>
     </main>
   );
-});
+};

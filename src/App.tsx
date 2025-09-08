@@ -145,13 +145,8 @@ Final deep content.`);
       <BusProvider>
       <div
         ref={shellRef}
-        className="editor-shell"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `${outlineWidth}px 1fr`,
-          gridTemplateRows: '1fr auto',
-          height: '100vh'
-        }}
+        className="editor-shell editor-shell--grid"
+        style={{ ['--outline-width' as any]: `${outlineWidth}px` }}
       >
       <OutlineErrorBoundary>
         <OutlinePane

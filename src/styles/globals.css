@@ -4,6 +4,13 @@
   contain: layout paint size; 
 }
 
+.editor-shell--grid {
+  display: grid;
+  grid-template-columns: var(--outline-width, 260px) 1fr;
+  grid-template-rows: 1fr auto;
+  height: 100vh;
+}
+
 /* Reusable editor action button styles */
 .editor-action-btn {
   position: absolute;
@@ -37,13 +44,27 @@
 
 /* Metrics bar styling */
 .metrics-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #374151;
+  color: #d1d5db;
+  padding: 10px 16px;
+  z-index: 1000;
+  font-size: 11px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 24px;
   backdrop-filter: blur(8px);
   border: none;
-  font-size: 11px;
   line-height: 1;
   user-select: none;
-  contain: paint;
+  contain: paint size;
   font-weight: 600;
+  pointer-events: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
