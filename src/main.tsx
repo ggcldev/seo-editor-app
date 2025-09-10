@@ -3,8 +3,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './app.css'
 import App from './App.tsx'
-// Temporarily comment out error reporting to debug
-// import './utils/errorReporting' // Initialize global error handling
+
+// Initialize global error handling in production only
+if (import.meta.env.PROD) {
+  await import('./utils/errorReporting');
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

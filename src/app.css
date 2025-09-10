@@ -11,3 +11,140 @@
   background-color: rgba(156, 163, 175, 0.8);
 }
 
+/* Document IO Controls */
+.document-io {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.document-io-button {
+  padding: 4px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  color: #374151;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.document-io-button:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.document-io-button:active {
+  background: #e5e7eb;
+  transform: translateY(1px);
+}
+
+.document-io-button--danger {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.document-io-button--danger:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+/* Quick Jump Modal */
+.quick-jump-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2rem 1.5rem;
+  padding-top: 10vh;
+}
+
+.quick-jump-modal {
+  width: 100%;
+  max-width: 32rem;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.quick-jump-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem;
+  outline: none;
+  font-size: 16px;
+  background: #fafafa;
+}
+
+.quick-jump-input::placeholder {
+  color: #9ca3af;
+}
+
+.quick-jump-results {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.quick-jump-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: white;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.quick-jump-item:hover {
+  background: #f9fafb;
+}
+
+.quick-jump-item:last-child {
+  border-bottom: none;
+}
+
+.quick-jump-level {
+  flex-shrink: 0;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  margin-right: 0.75rem;
+  min-width: 1.5rem;
+}
+
+.quick-jump-text {
+  flex: 1;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-jump-hint {
+  flex-shrink: 0;
+  color: #9ca3af;
+  font-size: 12px;
+  margin-left: 0.5rem;
+  padding: 2px 6px;
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.quick-jump-no-results {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+

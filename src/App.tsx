@@ -6,7 +6,10 @@ import { MetricsErrorBoundary } from '@/components/MetricsErrorBoundary';
 import { OutlineErrorBoundary } from '@/components/OutlineErrorBoundary';
 import { EditorErrorBoundary } from '@/components/EditorErrorBoundary';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { DocumentIO } from '@/components/DocumentIO';
+import { QuickJump } from '@/components/QuickJump';
 import { normalizeEOL } from '@/utils/eol';
+import { safeGet, safeSet, safeRemove } from '@/utils/storage';
 import { BusProvider } from '@/core/BusContext';
 import '@/styles/globals.css';
 
@@ -18,7 +21,10 @@ const OUTLINE_CONFIG = {
 
 export default function App() {
   
-  const [markdown, _setMarkdown] = useState(`# First Heading
+  // replace initial markdown state with persisted hydrate
+  const [markdown, _setMarkdown] = useState(() => {
+    const saved = safeGet('markdown');
+    return saved ?? `# First Heading
 
 This is some content under the first heading.
 
@@ -44,7 +50,8 @@ Even more text here to create a longer document that will actually need scrollin
 
 ### Deep subsection
 
-Final deep content.`);
+Final deep content.`;
+  });
   const setMarkdown = useCallback((v: string) => {
     _setMarkdown(prev => {
       const nv = normalizeEOL(v);
@@ -74,6 +81,19 @@ Final deep content.`);
 
   const toggleNarrow = useCallback(() => setNarrow(v => !v), []);
   const toggleHighlight = useCallback(() => setHighlightOn(v => !v), []);
+
+  // persist on change (throttled by React batching + normalizeEOL in setMarkdown)
+  useEffect(() => {
+    safeSet('markdown', markdown);
+  }, [markdown]);
+
+  // reset action
+  const onResetDoc = useCallback(() => {
+    if (confirm('Reset the current document? This cannot be undone.')) {
+      safeRemove('markdown');
+      _setMarkdown('');
+    }
+  }, []);
 
   // Cleanup
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
@@ -143,6 +163,7 @@ Final deep content.`);
   return (
     <AppErrorBoundary>
       <BusProvider>
+      <QuickJump />
       <div
         ref={shellRef}
         className="editor-shell editor-shell--grid"
@@ -158,6 +179,7 @@ Final deep content.`);
       </OutlineErrorBoundary>
 
       <div style={{ position: 'relative' }}>
+        <DocumentIO markdown={markdown} setMarkdown={setMarkdown} onReset={onResetDoc} />
         <MetricsErrorBoundary>
           <MetricsBar markdown={markdown} />
         </MetricsErrorBoundary>
