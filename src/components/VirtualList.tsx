@@ -60,6 +60,26 @@ export const VirtualList = forwardRef<VirtualListHandle, Props>(function Virtual
 
   // Public API: soft-follow ensureVisible with comfort band
   useImperativeHandle(ref, () => ({
+    /**
+     * Smoothly scrolls to ensure the specified row is visible with optional comfort margin.
+     * 
+     * Uses "soft follow" behavior - only scrolls if the target row is outside the visible
+     * area plus comfort band. This prevents jarring scrolls when the user is already close
+     * to the target. The band creates a margin around the viewport edges.
+     * 
+     * @param i - Zero-based row index to make visible
+     * @param opts - Options object with bandRows for comfort margin
+     * @param opts.bandRows - Number of rows to use as comfort margin (default: 0)
+     * 
+     * @example
+     * ```typescript
+     * // Scroll to row 10 with 2-row margin
+     * virtualListRef.current?.ensureVisible(10, { bandRows: 2 });
+     * 
+     * // Minimal scroll to just make row visible
+     * virtualListRef.current?.ensureVisible(activeIndex);
+     * ```
+     */
     ensureVisible: (i: number, opts?: { bandRows?: number }) => {
       const el = node; if (!el) return;
       const band = Math.max(0, opts?.bandRows ?? 0) * rowHeight;

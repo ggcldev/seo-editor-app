@@ -20,7 +20,7 @@ export function AppErrorBoundary({ children }: Props) {
             timestamp: new Date().toISOString(),
             componentStack: errorInfo.componentStack
           }));
-        } catch (e) {
+        } catch {
           // Ignore localStorage errors
         }
       }}

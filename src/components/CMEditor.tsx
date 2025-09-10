@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
@@ -78,6 +78,24 @@ function findHeadingAtPos(outline: Heading[], pos: number): Heading | null {
   return h;
 }
 
+/**
+ * Incrementally updates heading offsets after document changes for optimal performance.
+ * 
+ * Uses CodeMirror's ChangeDesc.mapPos() to efficiently track how document edits affect
+ * heading positions without reparsing the entire document. Returns the same array reference
+ * if no headings were affected, enabling React optimization via referential equality.
+ * 
+ * @param prev - Previous heading array with potentially stale offsets
+ * @param changes - CodeMirror ChangeDesc tracking all document modifications
+ * @returns Updated heading array with correct offsets, or same reference if unchanged
+ * 
+ * @example
+ * ```typescript
+ * // After user types at position 100, heading at position 150 moves to 155
+ * const updated = updateOutlineIncremental(outline, changeDesc);
+ * // Returns new array with updated offsets, or same reference if no headings affected
+ * ```
+ */
 function updateOutlineIncremental(
   prev: Heading[],
   changes: import("@codemirror/state").ChangeDesc
@@ -154,7 +172,11 @@ export const CMEditor = function CMEditor(
 
     // Lazy-create the worker only when needed
     if (bigDoc && !outlineWorkerRef.current) {
-      outlineWorkerRef.current = new Worker(new URL('../workers/outlineWorker.ts', import.meta.url), { type: 'module' });
+      try {
+        outlineWorkerRef.current = new Worker(new URL('../workers/outlineWorker.ts', import.meta.url), { type: 'module' });
+      } catch (error) {
+        console.warn('Worker creation failed, falling back to main thread:', error);
+      }
     }
 
     const worker = outlineWorkerRef.current;
@@ -172,11 +194,30 @@ export const CMEditor = function CMEditor(
       indexCacheRef.current = null;
       bus.emit('outline:computed', { headings: outlineRef.current, version: Date.now() });
       worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
     };
+
+    const onError = (error: ErrorEvent) => {
+      console.warn('Worker failed, falling back to main thread:', error);
+      // Fallback to main thread computation
+      const outline = computeOutlineFromDoc(md);
+      outlineRef.current = outline;
+      indexCacheRef.current = null;
+      bus.emit('outline:computed', { headings: outline, version: Date.now() });
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+      // Mark worker as failed to avoid future attempts
+      outlineWorkerRef.current = null;
+    };
+
     worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
     worker.postMessage(md);
 
-    return () => worker.removeEventListener('message', onMessage);
+    return () => {
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+    };
   }, [markdown, bus]);
 
 

@@ -8,6 +8,42 @@ export function isNullish<T>(v: T | null | undefined): v is null | undefined { r
 type GetOutline = () => Heading[];
 type OnActive = (id: string | null, source: 'scroll' | 'outline' | 'click' | 'keyboard') => void;
 
+/**
+ * Creates a CodeMirror ViewPlugin that tracks which heading is currently active
+ * based on the viewport position and automatically highlights it in the outline.
+ * 
+ * Uses binary search to efficiently find the heading closest to a viewport anchor point,
+ * with hysteresis to prevent flickering at heading boundaries and performance
+ * optimizations using requestAnimationFrame and scroll event throttling.
+ * 
+ * @param getOutline - Function that returns the current outline headings array, 
+ *                     must be sorted by offset (document position) in ascending order
+ * @param onActive - Callback invoked when the active heading changes, receives
+ *                   the heading ID and the source of the change for context
+ * @param bias - Viewport anchor position: "top" (0%), "center" (50%), or "third" (33%)
+ *               determines which part of the viewport is used to detect active headings
+ * 
+ * @returns Object with:
+ *   - plugin: CodeMirror ViewPlugin instance to install in editor
+ *   - suppress: Function to temporarily disable scroll spy (useful during programmatic scrolling)
+ * 
+ * @example
+ * ```typescript
+ * const { plugin, suppress } = scrollSpyPlugin(
+ *   () => outlineHeadings,
+ *   (id, source) => setActiveHeading(id),
+ *   "third"
+ * );
+ * 
+ * // Install in CodeMirror
+ * EditorView.create({
+ *   extensions: [plugin, ...]
+ * });
+ * 
+ * // Suppress during programmatic scroll
+ * suppress(editorView, 500); // 500ms suppression
+ * ```
+ */
 export function scrollSpyPlugin(
   getOutline: GetOutline,
   onActive: OnActive,

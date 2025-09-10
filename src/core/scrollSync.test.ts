@@ -21,6 +21,7 @@ describe('ScrollSync', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     scrollSync = new ScrollSync(mockView as any, 36)
   })
 
@@ -100,6 +101,7 @@ describe('ScrollSync', () => {
 
   describe('calm band calculations', () => {
     it('should use custom calm band size', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const customScrollSync = new ScrollSync(mockView as any, 50)
       const now = Date.now()
       const targetPos = 1000

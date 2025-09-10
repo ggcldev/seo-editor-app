@@ -146,7 +146,7 @@ Final deep content.`);
       <div
         ref={shellRef}
         className="editor-shell editor-shell--grid"
-        style={{ ['--outline-width' as any]: `${outlineWidth}px` }}
+        style={{ '--outline-width': `${outlineWidth}px` } as React.CSSProperties}
       >
       <OutlineErrorBoundary>
         <OutlinePane

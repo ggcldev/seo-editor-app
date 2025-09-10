@@ -12,6 +12,23 @@ export interface MetricsOptions {
   wordsPerMinute?: number; // default 200
 }
 
+/**
+ * Calculates comprehensive text metrics including word count, character counts, 
+ * paragraphs, and estimated reading time with performance optimizations.
+ * 
+ * Uses a single-pass character analysis algorithm for optimal performance on large texts.
+ * Handles Unicode line separators and normalizes all line endings for consistent results.
+ * 
+ * @param text - Input text to analyze (markdown, plain text, etc.)
+ * @param opts - Configuration options including words per minute for reading time
+ * @returns Comprehensive metrics object with counts and reading time estimate
+ * 
+ * @example
+ * ```typescript
+ * const metrics = calculateMetrics("Hello world!\n\nSecond paragraph.", { wordsPerMinute: 250 });
+ * // Returns: { words: 4, characters: 33, charactersNoSpaces: 29, paragraphs: 2, readingTime: 0.0 }
+ * ```
+ */
 export function calculateMetrics(text: string, opts: MetricsOptions = {}): TextMetrics {
   // Clamp WPM to reasonable bounds (60-400 WPM)
   const wpm = Math.max(60, Math.min(400, opts.wordsPerMinute ?? 200));

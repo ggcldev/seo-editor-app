@@ -29,7 +29,8 @@
       "Read(//Users/genylgicalde/Downloads/**)",
       "Bash(npm ls:*)",
       "Bash(npm test:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

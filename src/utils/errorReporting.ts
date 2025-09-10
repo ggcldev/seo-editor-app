@@ -83,7 +83,7 @@ class ErrorReporter {
     // Store in localStorage for debugging
     try {
       localStorage.setItem('app-errors', JSON.stringify(this.errors));
-    } catch (e) {
+    } catch {
       // Ignore localStorage errors
     }
 
@@ -106,7 +106,7 @@ class ErrorReporter {
       // }).catch(() => {
       //   // Ignore errors when reporting errors to avoid infinite loops
       // });
-    } catch (e) {
+    } catch {
       // Silently fail to avoid infinite error loops
     }
   }
@@ -119,7 +119,7 @@ class ErrorReporter {
     this.errors = [];
     try {
       localStorage.removeItem('app-errors');
-    } catch (e) {
+    } catch {
       // Ignore localStorage errors
     }
   }
@@ -141,6 +141,8 @@ export function logErrorHistory() {
 
 // Add to window for debugging in development
 if (process.env['NODE_ENV'] === 'development') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).errorReporter = errorReporter;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).logErrorHistory = logErrorHistory;
 }

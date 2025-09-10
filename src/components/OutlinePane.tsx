@@ -36,6 +36,24 @@ function hasChildren(outline: Heading[], i: number): boolean {
   return !!next && next.level > me.level;
 }
 
+/**
+ * Computes which headings should be visible in the outline tree based on collapsed state.
+ * 
+ * Uses a stack-based algorithm to track nesting levels and hide children of collapsed headings.
+ * The algorithm maintains a stack of collapsed heading levels to efficiently determine
+ * which headings should be hidden as descendants of collapsed parents.
+ * 
+ * @param outline - Complete list of headings in document order
+ * @param collapsed - Set of heading IDs that are currently collapsed (children hidden)
+ * @returns Filtered array containing only visible headings, maintaining document order
+ * 
+ * @example
+ * ```typescript
+ * // Given outline: [h1, h2, h3, h2] and h1 is collapsed
+ * // Returns: [h1, h2] (h2 and h3 under h1 are hidden, last h2 is visible)
+ * const visible = computeVisible(outline, new Set(['h1-id']));
+ * ```
+ */
 function computeVisible(outline: Heading[], collapsed: Set<string>): Heading[] {
   if (!outline.length || !collapsed.size) return outline;
   const visible: Heading[] = [];

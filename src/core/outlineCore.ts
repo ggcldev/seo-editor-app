@@ -18,6 +18,23 @@ export class OutlineIndex {
     });
   }
 
+  /**
+   * Finds the index of the first heading at or after the given document offset.
+   * 
+   * Uses binary search with bit-shift optimization for O(log n) performance.
+   * This is primarily used for efficient range queries and scroll synchronization.
+   * 
+   * @param offset - Character position in the document (0-based)
+   * @returns Index of the first heading >= offset, or -1 if no headings exist
+   * 
+   * @example
+   * ```typescript
+   * // Find headings in range [100, 200]
+   * const start = index.nearestByOffset(100);
+   * const end = index.nearestByOffset(201);
+   * const headingsInRange = index.items.slice(start, end);
+   * ```
+   */
   nearestByOffset(offset: number): number {
     if (this.offsets.length === 0) return -1;
     // Binary search for the first heading at or after the given offset

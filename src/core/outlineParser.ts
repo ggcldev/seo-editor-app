@@ -17,6 +17,12 @@ export type Heading = {
  * - Uses normalizeEOL to ensure consistent offsets across platforms.
  */
 export function parseOutline(markdownInput: string): Heading[] {
+  // Circuit breaker: Prevent memory exhaustion on extremely large documents
+  if (markdownInput.length > 50_000_000) { // 50MB limit
+    console.warn('Document too large for outline parsing (>50MB), outline disabled');
+    return [];
+  }
+  
   const markdown = normalizeEOL(markdownInput);
   const out: Heading[] = [];
   const seen = new Map<string, number>(); // Track slug usage for stable de-duplication

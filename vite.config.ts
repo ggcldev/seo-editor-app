@@ -15,23 +15,29 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    // Enable tree-shaking and minification optimizations
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    } as any,
     rollupOptions: {
       output: {
         manualChunks: {
+          // Keep React separate for better caching
           react: ['react', 'react-dom'],
-          codemirror: [
+          // Split CodeMirror core from language-specific packages
+          'codemirror-core': [
             '@codemirror/state',
-            '@codemirror/view',
-            '@codemirror/commands',
-            '@codemirror/language',
-            '@codemirror/lint',
-            '@codemirror/search',
-            '@codemirror/autocomplete',
-            '@codemirror/lang-markdown',
-            '@codemirror/lang-javascript',
-            '@codemirror/lang-html',
-            '@codemirror/lang-css',
+            '@codemirror/view', 
+            '@codemirror/commands'
           ],
+          'codemirror-lang': [
+            '@codemirror/lang-markdown'
+          ],
+          // Keep Turndown lazy-loaded since it's only used for paste
           turndown: ['turndown'],
         }
       }
