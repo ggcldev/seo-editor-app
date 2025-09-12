@@ -154,3 +154,73 @@
     scroll-behavior: auto; 
   } 
 }
+
+/* macOS-style autocomplete UI */
+:root {
+  --system-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  --macos-accent: #0a84ff;
+}
+
+/* macOS-like CodeMirror tooltip */
+.cm-tooltip {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.12), 0 2px 4px rgba(0,0,0,.08);
+  backdrop-filter: saturate(180%) blur(16px);
+  background: rgba(255,255,255,.85);
+  font-family: var(--system-font);
+}
+
+.cm-tooltip-autocomplete ul { 
+  padding: 6px; 
+  margin: 0;
+}
+
+.cm-tooltip-autocomplete li {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-family: var(--system-font);
+  list-style: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cm-tooltip-autocomplete li[aria-selected] {
+  background: rgba(10, 132, 255, 0.1);
+  color: var(--macos-accent);
+}
+
+.cm-tooltip-autocomplete li:hover {
+  background: rgba(10, 132, 255, 0.05);
+}
+
+/* Ensure system fonts are used in editor content */
+.cm-content { 
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', var(--system-font);
+}
+
+/* macOS-style inline AI prompt */
+.ai-inline {
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255,255,255,.85);
+  backdrop-filter: saturate(180%) blur(16px);
+  box-shadow: 0 12px 28px rgba(0,0,0,.12), 0 2px 4px rgba(0,0,0,.08);
+}
+
+.ai-inline-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: #111827;
+  min-width: 340px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.ai-inline-input::placeholder {
+  color: #9ca3af;
+}
+

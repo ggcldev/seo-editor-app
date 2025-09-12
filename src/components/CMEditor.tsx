@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
+import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete';
 import type { Heading } from "@/core/outlineParser";
 import { parseOutline } from "@/core/outlineParser";
 import { scrollSpyPlugin } from "@/cmScrollSpy";
@@ -126,6 +127,7 @@ export const CMEditor = function CMEditor(
   // Toggleable compartments
   const activeLineComp = useRef(new Compartment()).current;
   const themeComp = useRef(new Compartment()).current;
+  const autocompleteComp = useRef(new Compartment()).current;
 
   // callback refs
   const onChangeRef = useRef(setMarkdown);
@@ -139,6 +141,12 @@ export const CMEditor = function CMEditor(
   const lastActiveIdRef = useRef<string | null>(null);
   const indexCacheRef = useRef<{ outline: Heading[]; index: OutlineIndex } | null>(null);
   const outlineWorkerRef = useRef<Worker | null>(null);
+  
+  // AI inline prompt state
+  const [aiMode, setAiMode] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiPromptPos, setAiPromptPos] = useState<{ top: number; left: number } | null>(null);
+  const aiInputRef = useRef<HTMLInputElement | null>(null);
   
   function getOutlineIndex(): OutlineIndex {
     const outline = outlineRef.current;
@@ -161,11 +169,117 @@ export const CMEditor = function CMEditor(
     "third"
   ), [bus]);
 
+  // Slash command completions
+  const slashCommands = useMemo<Completion[]>(() => [
+    {
+      label: '/ai-mode',
+      type: 'keyword',
+      detail: 'Open inline AI prompt',
+      info: 'Open AI prompt at cursor position.',
+      apply(view, _c, from, to) {
+        view.dispatch({ changes: { from, to, insert: '' } });
+        setAiMode(true);
+        setAiPrompt('');
+      }
+    },
+    {
+      label: '/ai-prompt',
+      type: 'keyword',
+      detail: 'Open AI prompt',
+      info: 'Open a prompt input for your AI provider.',
+      apply(view, _c, from, to) {
+        view.dispatch({ changes: { from, to, insert: '' } });
+        bus.emit('ai:prompt:open', { initial: '' });
+      }
+    },
+    { 
+      label: '/h1', 
+      type: 'keyword', 
+      detail: 'Insert H1', 
+      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'# ' } }); } 
+    },
+    { 
+      label: '/h2', 
+      type: 'keyword', 
+      detail: 'Insert H2', 
+      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'## ' } }); } 
+    },
+    { 
+      label: '/h3', 
+      type: 'keyword', 
+      detail: 'Insert H3', 
+      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'### ' } }); } 
+    },
+  ], [bus, setAiMode, setAiPrompt]);
 
+  // Completion source for slash commands
+  const slashCommandSource = useMemo(() => {
+    return (context: CompletionContext) => {
+      const word = context.matchBefore(/\/[a-z-]*$/i);
+      if (!word) return null;
+      if (word.from === word.to && context.explicit === false) return null;
+      const q = word.text.toLowerCase();
+      const options = slashCommands.filter(c => c.label.toLowerCase().startsWith(q));
+      return { 
+        from: word.from, 
+        to: word.to, 
+        options: options.length ? options : slashCommands, 
+        validFor: /\/[a-z-]*$/i 
+      };
+    };
+  }, [slashCommands]);
 
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+  
+  // AI inline prompt positioning and focus
+  useEffect(() => {
+    const view = viewRef.current;
+    const host = hostRef.current;
+    if (!view || !host || !aiMode) return;
+
+    const updatePos = () => {
+      const head = view.state.selection.main.head;
+      const caret = view.coordsAtPos(head);
+      const hostRect = host.getBoundingClientRect();
+      if (caret) {
+        setAiPromptPos({
+          top: Math.max(0, caret.bottom - hostRect.top + 4),
+          left: Math.max(0, caret.left - hostRect.left),
+        });
+      }
+    };
+
+    updatePos();
+    const onScroll = () => updatePos();
+    const onResize = () => updatePos();
+    view.scrollDOM.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+
+    // small focus defer
+    const t = setTimeout(() => aiInputRef.current?.focus(), 0);
+
+    return () => {
+      clearTimeout(t);
+      view.scrollDOM.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [aiMode]);
+  
+  // AI inline prompt handlers
+  const submitInlinePrompt = useCallback(() => {
+    const text = aiPrompt.trim();
+    if (!text) { setAiMode(false); return; }
+    bus.emit('ai:prompt:submit', { prompt: text });
+    setAiMode(false);
+    setAiPrompt('');
+  }, [aiPrompt, bus]);
+
+  const cancelInlinePrompt = useCallback(() => {
+    setAiMode(false);
+    setAiPrompt("");
+  }, []);
   
   useEffect(() => {
     const md = markdown;
@@ -235,6 +349,12 @@ export const CMEditor = function CMEditor(
         EditorView.scrollMargins.of(() => ({ top: 72, bottom: 24 })),
         // Active-line goes through a Compartment (ON/OFF)
         activeLineComp.of(highlightOn ? highlightActiveLine() : []),
+        // Slash-command autocomplete
+        autocompleteComp.of(autocompletion({
+          override: [slashCommandSource],
+          defaultKeymap: true,
+          icons: false
+        })),
         // Scroll spy plugin
         scrollSpy.plugin,
         EditorView.theme({
@@ -608,6 +728,24 @@ export const CMEditor = function CMEditor(
               <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>
             </svg>
           </button>
+          {aiMode && aiPromptPos && (
+            <div
+              className="ai-inline"
+              style={{ position: 'absolute', top: aiPromptPos.top, left: aiPromptPos.left, zIndex: 5 }}
+            >
+              <input
+                ref={aiInputRef}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); submitInlinePrompt(); }
+                  if (e.key === 'Escape') { e.preventDefault(); cancelInlinePrompt(); }
+                }}
+                placeholder="Ask AI… (Enter to submit, Esc to cancel)"
+                className="ai-inline-input"
+              />
+            </div>
+          )}
           <div ref={hostRef} style={STYLES.editorHost} />
         </div>
       </div>

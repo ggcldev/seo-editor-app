@@ -11,6 +11,9 @@ import { QuickJump } from '@/components/QuickJump';
 import { normalizeEOL } from '@/utils/eol';
 import { safeGet, safeSet, safeRemove } from '@/utils/storage';
 import { BusProvider } from '@/core/BusContext';
+import { AIStateBridge } from '@/components/AIStateBridge';
+import { AIDebugListener } from '@/components/AIDebugListener';
+import { AIPromptModal } from '@/components/AIPromptModal';
 import '@/styles/globals.css';
 
 const OUTLINE_CONFIG = {
@@ -163,6 +166,8 @@ Final deep content.`;
   return (
     <AppErrorBoundary>
       <BusProvider>
+      <AIStateBridge />
+      <AIDebugListener />
       <QuickJump />
       <div
         ref={shellRef}
@@ -197,6 +202,7 @@ Final deep content.`;
         </EditorErrorBoundary>
       </div>
       </div>
+      <AIPromptModal />
       </BusProvider>
     </AppErrorBoundary>
   );

@@ -6,6 +6,11 @@ export type AppEvents = {
   'nav:jump': { offset: number; source: 'outline' | 'search' | 'toc' };
   'scrollspy:state': { flying: boolean; target?: number };
   'outline:request': Record<string, never>;
+  'ai:mode:toggle': Record<string, never>;
+  'ai:mode:state': { enabled: boolean };
+  'ai:prompt:open': { initial?: string };
+  'ai:prompt:submit': { prompt: string };
+  'command:run': { id: string; args?: Record<string, unknown> };
 };
 
 export type Unsub = () => void;
