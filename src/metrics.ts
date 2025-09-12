@@ -5,6 +5,16 @@ export interface TextMetrics {
   characters: number;
   charactersNoSpaces: number;
   paragraphs: number;
+  lines: number;
+  headings: {
+    h1: number;
+    h2: number;
+    h3: number;
+    h4: number;
+    h5: number;
+    h6: number;
+    total: number;
+  };
   readingTime: number; // minutes, 1 decimal
 }
 
@@ -57,16 +67,37 @@ export function calculateMetrics(text: string, opts: MetricsOptions = {}): TextM
     ? t.split(/\n{2,}/).length
     : 0;
 
+  // Lines = number of newlines + 1 (for non-empty text)
+  const lines = t.trim().length 
+    ? (t.match(/\n/g) || []).length + 1
+    : 0;
+
+  // Count markdown headings (# ## ### etc.)
+  const h1 = (t.match(/^# /gm) || []).length;
+  const h2 = (t.match(/^## /gm) || []).length;
+  const h3 = (t.match(/^### /gm) || []).length;
+  const h4 = (t.match(/^#### /gm) || []).length;
+  const h5 = (t.match(/^##### /gm) || []).length;
+  const h6 = (t.match(/^###### /gm) || []).length;
+  const headings = {
+    h1, h2, h3, h4, h5, h6,
+    total: h1 + h2 + h3 + h4 + h5 + h6
+  };
+
   // Reading time in minutes, rounded to 1 decimal place
   const minutes = Math.max(0, Math.round((words / wpm) * 10) / 10);
 
-  return { words, characters, charactersNoSpaces, paragraphs, readingTime: minutes };
+  return { words, characters, charactersNoSpaces, paragraphs, lines, headings, readingTime: minutes };
 }
 
 // Throttled version with trailing-invoke (debounced calculation for performance)
 let throttleId: number | null = null;
 let pendingArgs: [string, MetricsOptions, (m: TextMetrics) => void] | null = null;
-let lastResult: TextMetrics = { words: 0, characters: 0, charactersNoSpaces: 0, paragraphs: 0, readingTime: 0 };
+let lastResult: TextMetrics = { 
+  words: 0, characters: 0, charactersNoSpaces: 0, paragraphs: 0, lines: 0, 
+  headings: { h1: 0, h2: 0, h3: 0, h4: 0, h5: 0, h6: 0, total: 0 },
+  readingTime: 0 
+};
 
 export function calculateMetricsThrottled(
   text: string,

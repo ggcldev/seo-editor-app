@@ -32,7 +32,9 @@ export const MetricsBar = memo(function MetricsBar({ markdown }: MetricsBarProps
     <div className="metrics-bar">
       <span>Words: {formatNumber(metrics.words)}</span>
       <span>Characters: {formatNumber(metrics.characters)}</span>
+      <span>Lines: {formatNumber(metrics.lines)}</span>
       <span>Paragraphs: {formatNumber(metrics.paragraphs)}</span>
+      <span>H1: {metrics.headings.h1} - H2: {metrics.headings.h2} - H3: {metrics.headings.h3}</span>
     </div>
   );
 });
