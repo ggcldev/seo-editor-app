@@ -88,12 +88,14 @@ class ErrorReporter {
     }
 
     // In production, you would send to an error reporting service
-    if (process.env['NODE_ENV'] === 'production') {
+    if (import.meta.env.PROD) {
       this.sendToErrorService(errorReport);
     }
   }
 
   private sendToErrorService(_errorReport: ErrorReport) {
+    void _errorReport; // prevent unused param warning
+
     // Example: Send to Sentry, LogRocket, or your own error service
     // This is a placeholder - implement based on your error reporting needs
     
@@ -130,7 +132,7 @@ export const errorReporter = new ErrorReporter();
 
 // Development-only error debugging helper
 export function logErrorHistory() {
-  if (process.env['NODE_ENV'] === 'development') {
+  if (import.meta.env.DEV) {
     console.group('Error History');
     errorReporter.getErrors().forEach((error, index) => {
       console.error(`${index + 1}.`, error);
@@ -140,7 +142,7 @@ export function logErrorHistory() {
 }
 
 // Add to window for debugging in development
-if (process.env['NODE_ENV'] === 'development') {
+if (import.meta.env.DEV) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).errorReporter = errorReporter;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

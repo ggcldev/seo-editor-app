@@ -337,7 +337,7 @@ describe('ScrollSpy Edge Cases', () => {
       vi.useFakeTimers()
       const mockView = createMockView()
 
-      let currentHeading = 0
+      const _currentHeading = 0
       const getOutline = () => mockOutline
       
       // Mock posAtCoords to alternate between boundaries

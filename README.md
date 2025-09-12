@@ -42,15 +42,14 @@ type AppEvents = {
 ```
 src/
 ├── components/         # React components
-├── hooks/             # Custom React hooks
-├── utils/             # Utility functions
-├── styles/            # Global styles
-├── extensions/        # CodeMirror extensions
-└── core/              # EventBus architecture services
-    ├── eventBus.ts    # Typed event system
-    ├── BusContext.tsx # React Context wrapper
-    ├── outlineCore.ts # O(1) outline operations
-    └── scrollSync.ts  # Target-aware suppression
+├── core/               # EventBus architecture services
+│   ├── eventBus.ts    # Typed event system
+│   ├── BusContext.tsx # React Context wrapper
+│   ├── outlineCore.ts # O(1) outline operations
+│   └── scrollSync.ts  # Target-aware suppression
+├── utils/              # Utility functions
+├── workers/            # Web workers
+└── test/               # Test setup and utilities
 ```
 
 ## Getting Started
@@ -64,7 +63,7 @@ src/
 1. Clone the repository:
 ```bash
 git clone https://github.com/ggcldev/seo-editor-app.git
-cd seo-editor
+cd seo-editor-app
 ```
 
 2. Install dependencies:

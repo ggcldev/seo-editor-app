@@ -30,7 +30,8 @@
       "Bash(npm ls:*)",
       "Bash(npm test:*)",
       "Bash(pkill:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(cloc:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
