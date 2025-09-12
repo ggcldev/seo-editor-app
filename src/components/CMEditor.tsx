@@ -155,6 +155,7 @@ export const CMEditor = function CMEditor(
     (id, source) => {
       // EventBus: emit active heading with source
       const heading = outlineRef.current.find(h => h.id === id);
+      lastActiveIdRef.current = id; // keep in sync with plugin
       bus.emit('outline:active', { id, offset: heading?.offset ?? null, source: source ?? 'scroll' });
     },
     "third"

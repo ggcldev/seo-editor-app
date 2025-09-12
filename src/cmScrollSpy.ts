@@ -49,8 +49,8 @@ export function scrollSpyPlugin(
   onActive: OnActive,
   bias: "top" | "center" | "third" = "third"
 ) {
-  // Viewport anchor as a fraction of height
-  const frac = bias === "top" ? 0 : bias === "center" ? 0.5 : 0.33;
+  // Viewport anchor as a fraction of height (more eager switching with 0.25)
+  const frac = bias === "top" ? 0 : bias === "center" ? 0.5 : 0.25; // was 0.33
 
   // Track per-view instances so suppress() is scoped to the right editor
   const instances = new WeakMap<EditorView, { suppress: (ms?: number) => void }>();
@@ -63,9 +63,9 @@ export function scrollSpyPlugin(
     let settleTimer: number | undefined;
 
     // keep flicker down at boundaries but don't "stick"
-    const HYSTERESIS_MS = 90;
+    const HYSTERESIS_MS = 40;   // was 90
     // when no native 'scrollend', run a final settle after idle
-    const SETTLE_IDLE_MS = 80;
+    const SETTLE_IDLE_MS = 40;  // was 80
     const supportsScrollEnd = "onscrollend" in (view.scrollDOM as HTMLElement);
 
     function clamp(n: number, lo: number, hi: number) {

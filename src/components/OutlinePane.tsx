@@ -175,7 +175,7 @@ export const OutlinePane = React.memo(function OutlinePane({
         }
       } else {
         // Non-virtual mode: different strategies for different event types
-        const delay = isUserAction ? 50 : 200; // Longer delay for scroll events
+        const delay = isUserAction ? 24 : 60;
         
         scrollTimeout = window.setTimeout(() => {
           // Find the correct scrollable container - the inner .outline-scroll div

@@ -7,7 +7,7 @@ export class ScrollSync {
   private readonly view: EditorView;
   private readonly calmBandPx: number; // Pixel tolerance around viewport center
 
-  constructor(view: EditorView, calmBandPx = 36) {
+  constructor(view: EditorView, calmBandPx = 44) { // was 36
     this.view = view;
     this.calmBandPx = calmBandPx; // Default 36px matches typical line height
   }
