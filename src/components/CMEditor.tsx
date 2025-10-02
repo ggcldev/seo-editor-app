@@ -147,6 +147,7 @@ export const CMEditor = function CMEditor(
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiPromptPos, setAiPromptPos] = useState<{ top: number; left: number } | null>(null);
   const aiInputRef = useRef<HTMLInputElement | null>(null);
+  const aiStreamRef = useRef<{ id: string; from: number; to: number } | null>(null);
   
   function getOutlineIndex(): OutlineIndex {
     const outline = outlineRef.current;
@@ -280,6 +281,39 @@ export const CMEditor = function CMEditor(
     setAiMode(false);
     setAiPrompt("");
   }, []);
+
+  // When the user submits an inline prompt, open a stream session
+  useEffect(() => {
+    const off = bus.on('ai:prompt:submit', ({ prompt }) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const pos = view.state.selection.main.head;
+      aiStreamRef.current = { id, from: pos, to: pos };
+      bus.emit('ai:stream:request', { id, prompt });
+    });
+    return () => off();
+  }, [bus]);
+
+  // Apply incoming stream chunks to the editor
+  useEffect(() => {
+    const offStart = bus.on('ai:stream:start', () => { /* optional: show spinner */ });
+
+    const offChunk = bus.on('ai:stream:chunk', ({ id, text }) => {
+      const s = aiStreamRef.current;
+      const view = viewRef.current;
+      if (!s || s.id !== id || !view || !text) return;
+      const insertAt = s.to;
+      view.dispatch({ changes: { from: insertAt, to: insertAt, insert: text } });
+      aiStreamRef.current = { ...s, to: insertAt + text.length };
+    });
+
+    const finish = () => { aiStreamRef.current = null; };
+    const offDone = bus.on('ai:stream:done', ({ id }) => { if (aiStreamRef.current?.id === id) finish(); });
+    const offErr = bus.on('ai:stream:error', ({ id }) => { if (aiStreamRef.current?.id === id) finish(); });
+
+    return () => { offStart(); offChunk(); offDone(); offErr(); };
+  }, [bus]);
   
   useEffect(() => {
     const md = markdown;
@@ -382,6 +416,15 @@ export const CMEditor = function CMEditor(
           } : {})
         })),
         EditorView.updateListener.of((u) => {
+          // Keep AI stream insertion range in sync with document changes
+          if (aiStreamRef.current && u.docChanged) {
+            aiStreamRef.current = {
+              id: aiStreamRef.current.id,
+              from: u.changes.mapPos(aiStreamRef.current.from, 1),
+              to: u.changes.mapPos(aiStreamRef.current.to, 1),
+            };
+          }
+
           // Keep upstream state in sync
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
           if (u.selectionSet) {

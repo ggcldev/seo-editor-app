@@ -14,6 +14,9 @@ import { BusProvider } from '@/core/BusContext';
 import { AIStateBridge } from '@/components/AIStateBridge';
 import { AIDebugListener } from '@/components/AIDebugListener';
 import { AIPromptModal } from '@/components/AIPromptModal';
+import { AIServiceBridge } from '@/components/AIServiceBridge';
+import { aiRegistry } from '@/services/aiProviders';
+import { AIConfigStorage, installConsoleHelpers } from '@/services/aiConfig';
 import '@/styles/globals.css';
 
 const OUTLINE_CONFIG = {
@@ -98,6 +101,21 @@ Final deep content.`;
     }
   }, []);
 
+  // Load saved AI configurations on mount
+  useEffect(() => {
+    const configs = AIConfigStorage.load();
+    if (configs.length > 0) {
+      aiRegistry.loadFromConfigs(configs);
+      // Set the first enabled provider as default
+      const enabledProvider = configs.find(c => c.enabled);
+      if (enabledProvider) {
+        aiRegistry.setDefault(enabledProvider.id);
+      }
+    }
+    // Install console helpers for easy configuration
+    installConsoleHelpers();
+  }, []);
+
   // Cleanup
   useEffect(() => () => { document.body.classList.remove('noselect'); }, []);
 
@@ -167,6 +185,7 @@ Final deep content.`;
     <AppErrorBoundary>
       <BusProvider>
       <AIStateBridge />
+      <AIServiceBridge />
       <AIDebugListener />
       <QuickJump />
       <div

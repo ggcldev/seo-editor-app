@@ -31,7 +31,11 @@
       "Bash(npm test:*)",
       "Bash(pkill:*)",
       "Bash(wc:*)",
-      "Bash(cloc:*)"
+      "Bash(cloc:*)",
+      "Bash(export:*)",
+      "Read(//Users/genylgicalde/**)",
+      "Bash(ollama serve:*)",
+      "Bash(ollama list:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

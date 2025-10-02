@@ -113,54 +113,126 @@ Modern browsers with ES2020+ support:
 - Safari 14+
 - Edge 88+
 
-## Roadmap
+## AI Integration
 
-### 🤖 AI Integration (Planned)
+### 🤖 Inline AI Assistance
 
-The SEO Content Editor is being designed with AI integration in mind. Future versions will include:
+The editor includes a powerful, extensible AI provider system with streaming support.
 
-#### User-Configurable AI Models
-- **Provider Flexibility**: Support for OpenAI, Anthropic, local models (Ollama), and custom APIs
-- **Privacy-First**: Users control their own API keys and data
-- **Cost Control**: Users pay for their own AI usage
-- **Secure Configuration**: Encrypted storage of API credentials
+#### Current Features
+- **Inline AI Prompts** - Type `/ai-mode` to open AI prompt at cursor
+- **Slash Commands** - Quick access with `/ai-prompt`, `/h1`, `/h2`, `/h3`
+- **Real-time Streaming** - See AI responses appear as they're generated
+- **Provider System** - Pluggable architecture for multiple AI services
 
-#### AI Features Planned
-- **Real-time Content Suggestions** while typing
-- **SEO Optimization Recommendations** based on content analysis
-- **Grammar and Style Improvements** with contextual suggestions
-- **Content Structure Analysis** and outline recommendations
-- **Automated Heading Generation** based on content flow
-- **Smart Completions** integrated with CodeMirror editor
+#### Supported AI Providers
 
-#### Technical Implementation
+##### Mock Provider (Default)
 ```typescript
-// AI Provider Architecture
-interface AIProvider {
-  id: string;
-  name: string;
-  configure(config: AIConfig): Promise<void>;
-  generateText(prompt: string): AsyncIterable<string>;
-  analyzeContent(content: string): Promise<AIAnalysis>;
-}
-
-// Supported Providers
-type AIProviderType = 'openai' | 'anthropic' | 'local' | 'custom';
+// No API key needed - for testing and demo purposes
+// Automatically echoes prompts with sample text
 ```
 
-#### Integration Points
-- **Event Bus System**: Ready for AI communication
-- **Error Boundaries**: Will contain AI failures gracefully
-- **Text Pipeline**: Real-time content analysis infrastructure in place
-- **Modular Architecture**: Easy addition of AI panels and features
+##### OpenAI
+```typescript
+import { aiRegistry, OpenAIProvider } from '@/services/aiProviders';
+
+// Configure OpenAI provider
+aiRegistry.register(new OpenAIProvider({
+  id: 'openai',
+  name: 'OpenAI',
+  apiKey: 'sk-...',
+  model: 'gpt-4o',  // or 'gpt-4o-mini', 'gpt-3.5-turbo'
+  enabled: true
+}));
+
+aiRegistry.setDefault('openai');
+```
+
+##### Anthropic (Claude)
+```typescript
+import { aiRegistry, AnthropicProvider } from '@/services/aiProviders';
+
+// Configure Anthropic provider
+aiRegistry.register(new AnthropicProvider({
+  id: 'anthropic',
+  name: 'Anthropic',
+  apiKey: 'sk-ant-...',
+  model: 'claude-3-5-sonnet-20241022',  // or other Claude models
+  enabled: true
+}));
+
+aiRegistry.setDefault('anthropic');
+```
+
+#### Using AI in the Editor
+
+1. **Type `/` in the editor** to see available commands
+2. **Select `/ai-mode`** to open inline prompt
+3. **Type your request** and press Enter
+4. **Watch the AI response stream** directly into your document
+
+#### Custom AI Providers
+
+You can add custom providers by implementing the `AIProvider` interface:
+
+```typescript
+import { AIProvider, StreamChunk, aiRegistry } from '@/services/aiProviders';
+
+class CustomAIProvider implements AIProvider {
+  id = 'custom';
+  name = 'My Custom AI';
+
+  async *stream(prompt: string): AsyncGenerator<StreamChunk, void, void> {
+    // Your custom streaming implementation
+    const response = await fetch('https://your-api.com/stream', {
+      method: 'POST',
+      body: JSON.stringify({ prompt })
+    });
+
+    // Stream chunks back
+    for await (const chunk of parseYourStream(response)) {
+      yield { text: chunk };
+    }
+  }
+}
+
+// Register your provider
+aiRegistry.register(new CustomAIProvider());
+```
+
+#### Event Bus Integration
+
+The AI system uses the EventBus for communication:
+
+```typescript
+// Request AI stream
+bus.emit('ai:stream:request', {
+  id: 'unique-id',
+  prompt: 'Your prompt',
+  providerId: 'openai'  // Optional, uses default if not specified
+});
+
+// Listen for stream events
+bus.on('ai:stream:start', ({ id }) => { /* Stream started */ });
+bus.on('ai:stream:chunk', ({ id, text }) => { /* New chunk */ });
+bus.on('ai:stream:done', ({ id }) => { /* Stream complete */ });
+bus.on('ai:stream:error', ({ id, message }) => { /* Handle error */ });
+```
 
 #### Privacy & Security
-- **Local-Only Processing**: Option for Ollama/local models
-- **User-Controlled Data**: No data sent without explicit permission
-- **Flexible Configuration**: Support for on-premises AI solutions
-- **Opt-Out Available**: All AI features completely optional
+- **User-Controlled API Keys**: You manage your own credentials
+- **No Data Storage**: API keys and requests stay in your browser
+- **Provider Choice**: Use OpenAI, Anthropic, or your own AI service
+- **Opt-In System**: Mock provider by default, real APIs require configuration
 
-The current architecture provides an excellent foundation for AI integration while maintaining user privacy and choice.
+#### Roadmap
+- [ ] **Settings Panel** for easy AI provider configuration
+- [ ] **Multiple Active Providers** - switch providers per request
+- [ ] **Custom Slash Commands** - define your own AI shortcuts
+- [ ] **Ollama Support** - local AI models without cloud APIs
+- [ ] **Advanced Prompts** - pre-configured templates for SEO tasks
+- [ ] **Content Analysis** - AI-powered SEO suggestions and improvements
 
 ## Contributing
 

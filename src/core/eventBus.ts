@@ -11,6 +11,11 @@ export type AppEvents = {
   'ai:prompt:open': { initial?: string };
   'ai:prompt:submit': { prompt: string };
   'command:run': { id: string; args?: Record<string, unknown> };
+  'ai:stream:request': { id: string; prompt: string; providerId?: string };
+  'ai:stream:start': { id: string };
+  'ai:stream:chunk': { id: string; text: string };
+  'ai:stream:done': { id: string };
+  'ai:stream:error': { id: string; message: string };
 };
 
 export type Unsub = () => void;
