@@ -170,62 +170,47 @@ export const CMEditor = function CMEditor(
     "third"
   ), [bus]);
 
-  // Slash command completions
+  // Slash command completions - only heading shortcuts
   const slashCommands = useMemo<Completion[]>(() => [
     {
-      label: '/ai-mode',
+      label: '/h1',
       type: 'keyword',
-      detail: 'Open inline AI prompt',
-      info: 'Open AI prompt at cursor position.',
-      apply(view, _c, from, to) {
-        view.dispatch({ changes: { from, to, insert: '' } });
-        setAiMode(true);
-        setAiPrompt('');
-      }
+      detail: 'Insert H1',
+      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'# ' } }); }
     },
     {
-      label: '/ai-prompt',
+      label: '/h2',
       type: 'keyword',
-      detail: 'Open AI prompt',
-      info: 'Open a prompt input for your AI provider.',
-      apply(view, _c, from, to) {
-        view.dispatch({ changes: { from, to, insert: '' } });
-        bus.emit('ai:prompt:open', { initial: '' });
-      }
+      detail: 'Insert H2',
+      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'## ' } }); }
     },
-    { 
-      label: '/h1', 
-      type: 'keyword', 
-      detail: 'Insert H1', 
-      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'# ' } }); } 
+    {
+      label: '/h3',
+      type: 'keyword',
+      detail: 'Insert H3',
+      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'### ' } }); }
     },
-    { 
-      label: '/h2', 
-      type: 'keyword', 
-      detail: 'Insert H2', 
-      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'## ' } }); } 
-    },
-    { 
-      label: '/h3', 
-      type: 'keyword', 
-      detail: 'Insert H3', 
-      apply(v,_c,f,t){ v.dispatch({ changes:{ from:f,to:t,insert:'### ' } }); } 
-    },
-  ], [bus, setAiMode, setAiPrompt]);
+  ], []);
 
   // Completion source for slash commands
   const slashCommandSource = useMemo(() => {
     return (context: CompletionContext) => {
-      const word = context.matchBefore(/\/[a-z-]*$/i);
-      if (!word) return null;
-      if (word.from === word.to && context.explicit === false) return null;
-      const q = word.text.toLowerCase();
-      const options = slashCommands.filter(c => c.label.toLowerCase().startsWith(q));
-      return { 
-        from: word.from, 
-        to: word.to, 
-        options: options.length ? options : slashCommands, 
-        validFor: /\/[a-z-]*$/i 
+      const before = context.matchBefore(/\/\w*$/);
+      if (!before) return null;
+
+      // Filter commands based on what's been typed
+      const query = before.text.toLowerCase();
+      let filtered = slashCommands.filter(c => c.label.toLowerCase().startsWith(query));
+
+      // If nothing matches, show all commands (user just typed "/")
+      if (filtered.length === 0 && query === '/') {
+        filtered = slashCommands;
+      }
+
+      return {
+        from: before.from,
+        options: filtered,
+        validFor: /^\/\w*$/
       };
     };
   }, [slashCommands]);
@@ -387,7 +372,9 @@ export const CMEditor = function CMEditor(
         autocompleteComp.of(autocompletion({
           override: [slashCommandSource],
           defaultKeymap: true,
-          icons: false
+          icons: false,
+          activateOnTyping: true,
+          closeOnBlur: true
         })),
         // Scroll spy plugin
         scrollSpy.plugin,
