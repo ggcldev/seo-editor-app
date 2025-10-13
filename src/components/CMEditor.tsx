@@ -194,16 +194,22 @@ export const CMEditor = function CMEditor(
   // Completion source for slash commands
   const slashCommandSource = useMemo(() => {
     return (context: CompletionContext) => {
-      const word = context.matchBefore(/\/[a-z-]*$/i);
-      if (!word) return null;
-      if (word.from === word.to && context.explicit === false) return null;
-      const q = word.text.toLowerCase();
-      const options = slashCommands.filter(c => c.label.toLowerCase().startsWith(q));
-      return { 
-        from: word.from, 
-        to: word.to, 
-        options: options.length ? options : slashCommands, 
-        validFor: /\/[a-z-]*$/i 
+      const before = context.matchBefore(/\/\w*$/);
+      if (!before) return null;
+
+      // Filter commands based on what's been typed
+      const query = before.text.toLowerCase();
+      let filtered = slashCommands.filter(c => c.label.toLowerCase().startsWith(query));
+
+      // If nothing matches, show all commands (user just typed "/")
+      if (filtered.length === 0 && query === '/') {
+        filtered = slashCommands;
+      }
+
+      return {
+        from: before.from,
+        options: filtered,
+        validFor: /^\/\w*$/
       };
     };
   }, [slashCommands]);
@@ -320,7 +326,9 @@ export const CMEditor = function CMEditor(
         autocompleteComp.of(autocompletion({
           override: [slashCommandSource],
           defaultKeymap: true,
-          icons: false
+          icons: false,
+          activateOnTyping: true,
+          closeOnBlur: true
         })),
         // Scroll spy plugin
         scrollSpy.plugin,
