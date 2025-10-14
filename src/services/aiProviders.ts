@@ -57,8 +57,15 @@ export class OpenAIProvider implements AIProvider {
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a text rewriting assistant. When given text to rewrite, return ONLY the rewritten text. Never add explanations, comments, or meta-commentary like "Here is..." or "Sure, here\'s...". Just return the actual rewritten text directly.'
+          },
+          { role: 'user', content: prompt }
+        ],
         stream: true,
+        temperature: 0.7,
       }),
       ...(signal && { signal }),
     });
@@ -127,9 +134,11 @@ export class AnthropicProvider implements AIProvider {
       },
       body: JSON.stringify({
         model,
+        system: 'You are a text rewriting assistant. When given text to rewrite, return ONLY the rewritten text. Never add explanations, comments, or meta-commentary like "Here is..." or "Sure, here\'s...". Just return the actual rewritten text directly.',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 4096,
         stream: true,
+        temperature: 0.7,
       }),
       ...(signal && { signal }),
     });
@@ -196,8 +205,15 @@ export class GrokProvider implements AIProvider {
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a text rewriting assistant. When given text to rewrite, return ONLY the rewritten text. Never add explanations, comments, or meta-commentary like "Here is..." or "Sure, here\'s...". Just return the actual rewritten text directly.'
+          },
+          { role: 'user', content: prompt }
+        ],
         stream: true,
+        temperature: 0.7,
       }),
       ...(signal && { signal }),
     });
@@ -265,8 +281,15 @@ export class GroqProvider implements AIProvider {
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a text rewriting assistant. When given text to rewrite, return ONLY the rewritten text. Never add explanations, comments, or meta-commentary like "Here is..." or "Sure, here\'s...". Just return the actual rewritten text directly.'
+          },
+          { role: 'user', content: prompt }
+        ],
         stream: true,
+        temperature: 0.7,
       }),
       ...(signal && { signal }),
     });
@@ -334,8 +357,15 @@ export class TogetherProvider implements AIProvider {
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a text rewriting assistant. When given text to rewrite, return ONLY the rewritten text. Never add explanations, comments, or meta-commentary like "Here is..." or "Sure, here\'s...". Just return the actual rewritten text directly.'
+          },
+          { role: 'user', content: prompt }
+        ],
         stream: true,
+        temperature: 0.7,
       }),
       ...(signal && { signal }),
     });
@@ -395,6 +425,10 @@ export class OllamaProvider implements AIProvider {
     const model = this.config.model || 'llama3.2';
     const baseURL = this.config.baseURL || 'http://localhost:11434';
 
+    // Add system context to make responses direct text only
+    const systemPrompt = `You are a text rewriting assistant. When given text to rewrite, return ONLY the rewritten text. Never add explanations, comments, or meta-commentary. Never say things like "Here's the rewritten version" or "Okay" - just return the actual rewritten text directly.`;
+    const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+
     const response = await fetch(`${baseURL}/api/generate`, {
       method: 'POST',
       headers: {
@@ -402,8 +436,12 @@ export class OllamaProvider implements AIProvider {
       },
       body: JSON.stringify({
         model,
-        prompt,
+        prompt: fullPrompt,
         stream: true,
+        options: {
+          temperature: 0.7,
+          top_p: 0.9,
+        }
       }),
       ...(signal && { signal }),
     });

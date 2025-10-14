@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirror/state";
-import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
+import { EditorView, keymap, highlightActiveLine, Decoration, ViewPlugin, DecorationSet, ViewUpdate } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
+import { syntaxHighlighting, HighlightStyle, syntaxTree } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete';
 import type { Heading } from "@/core/outlineParser";
 import { parseOutline } from "@/core/outlineParser";
@@ -113,6 +115,76 @@ function updateOutlineIncremental(
   return changed ? next : prev;
 }
 
+// Custom syntax highlighting for bold headers
+const headerHighlighting = HighlightStyle.define([
+  { tag: tags.heading1, fontWeight: "700", color: "#111827" },
+  { tag: tags.heading2, fontWeight: "700", color: "#1f2937" },
+  { tag: tags.heading3, fontWeight: "700", color: "#374151" },
+  { tag: tags.heading4, fontWeight: "700", color: "#4b5563" },
+  { tag: tags.heading5, fontWeight: "700", color: "#6b7280" },
+  { tag: tags.heading6, fontWeight: "700", color: "#6b7280" },
+]);
+
+// Base theme for header sizing (applied to entire lines)
+const headerTheme = EditorView.baseTheme({
+  ".cm-line.cm-h1": {
+    fontSize: "18px",
+    lineHeight: "1.6",
+    paddingTop: "4px",
+    paddingBottom: "2px"
+  },
+  ".cm-line.cm-h2": {
+    fontSize: "16px",
+    lineHeight: "1.6",
+    paddingTop: "3px",
+    paddingBottom: "1px"
+  },
+  ".cm-line.cm-h3, .cm-line.cm-h4, .cm-line.cm-h5, .cm-line.cm-h6": {
+    fontSize: "14px",
+    lineHeight: "1.6"
+  }
+});
+
+// Plugin to add heading classes to lines
+const headerLinePlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = this.buildDecorations(update.view);
+    }
+  }
+
+  buildDecorations(view: EditorView): DecorationSet {
+    const decorations = [];
+    const tree = syntaxTree(view.state);
+
+    for (const { from, to } of view.visibleRanges) {
+      tree.iterate({
+        from,
+        to,
+        enter: (node) => {
+          if (node.name.startsWith("ATXHeading")) {
+            const level = node.name.match(/ATXHeading(\d)/)?.[1];
+            if (level) {
+              const line = view.state.doc.lineAt(node.from);
+              const deco = Decoration.line({ class: `cm-h${level}` });
+              decorations.push(deco.range(line.from));
+            }
+          }
+        }
+      });
+    }
+
+    return Decoration.set(decorations, true);
+  }
+}, {
+  decorations: v => v.decorations
+});
 
 export const CMEditor = function CMEditor(
   { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady }: Props
@@ -142,13 +214,12 @@ export const CMEditor = function CMEditor(
   const indexCacheRef = useRef<{ outline: Heading[]; index: OutlineIndex } | null>(null);
   const outlineWorkerRef = useRef<Worker | null>(null);
   
-  // AI inline prompt state
-  const [aiMode, setAiMode] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [aiPromptPos, setAiPromptPos] = useState<{ top: number; left: number } | null>(null);
-  const aiInputRef = useRef<HTMLInputElement | null>(null);
   const aiStreamRef = useRef<{ id: string; from: number; to: number } | null>(null);
-  
+
+  // Selection popup state
+  const [selectionPopup, setSelectionPopup] = useState<{ top: number; left: number; text: string; from: number; to: number } | null>(null);
+  const [showAIDropdown, setShowAIDropdown] = useState(false);
+
   function getOutlineIndex(): OutlineIndex {
     const outline = outlineRef.current;
     const cached = indexCacheRef.current;
@@ -218,82 +289,37 @@ export const CMEditor = function CMEditor(
   useEffect(() => { onChangeRef.current = setMarkdown; }, [setMarkdown]);
   useEffect(() => { onCaretRef.current = onCaretChange; }, [onCaretChange]);
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
-  
-  // AI inline prompt positioning and focus
-  useEffect(() => {
-    const view = viewRef.current;
-    const host = hostRef.current;
-    if (!view || !host || !aiMode) return;
-
-    const updatePos = () => {
-      const head = view.state.selection.main.head;
-      const caret = view.coordsAtPos(head);
-      const hostRect = host.getBoundingClientRect();
-      if (caret) {
-        setAiPromptPos({
-          top: Math.max(0, caret.bottom - hostRect.top + 4),
-          left: Math.max(0, caret.left - hostRect.left),
-        });
-      }
-    };
-
-    updatePos();
-    const onScroll = () => updatePos();
-    const onResize = () => updatePos();
-    view.scrollDOM.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onResize, { passive: true });
-
-    // small focus defer
-    const t = setTimeout(() => aiInputRef.current?.focus(), 0);
-
-    return () => {
-      clearTimeout(t);
-      view.scrollDOM.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onResize);
-    };
-  }, [aiMode]);
-  
-  // AI inline prompt handlers
-  const submitInlinePrompt = useCallback(() => {
-    const text = aiPrompt.trim();
-    if (!text) { setAiMode(false); return; }
-    bus.emit('ai:prompt:submit', { prompt: text });
-    setAiMode(false);
-    setAiPrompt('');
-  }, [aiPrompt, bus]);
-
-  const cancelInlinePrompt = useCallback(() => {
-    setAiMode(false);
-    setAiPrompt("");
-  }, []);
-
-  // When the user submits an inline prompt, open a stream session
-  useEffect(() => {
-    const off = bus.on('ai:prompt:submit', ({ prompt }) => {
-      const view = viewRef.current;
-      if (!view) return;
-      const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const pos = view.state.selection.main.head;
-      aiStreamRef.current = { id, from: pos, to: pos };
-      bus.emit('ai:stream:request', { id, prompt });
-    });
-    return () => off();
-  }, [bus]);
 
   // Apply incoming stream chunks to the editor
   useEffect(() => {
-    const offStart = bus.on('ai:stream:start', () => { /* optional: show spinner */ });
+    let isFirstChunk = true;
+
+    const offStart = bus.on('ai:stream:start', () => {
+      isFirstChunk = true; // Reset for each new stream
+    });
 
     const offChunk = bus.on('ai:stream:chunk', ({ id, text }) => {
       const s = aiStreamRef.current;
       const view = viewRef.current;
       if (!s || s.id !== id || !view || !text) return;
-      const insertAt = s.to;
-      view.dispatch({ changes: { from: insertAt, to: insertAt, insert: text } });
-      aiStreamRef.current = { ...s, to: insertAt + text.length };
+
+      if (isFirstChunk) {
+        // First chunk: replace the original text range
+        view.dispatch({ changes: { from: s.from, to: s.to, insert: text } });
+        aiStreamRef.current = { ...s, from: s.from, to: s.from + text.length };
+        isFirstChunk = false;
+      } else {
+        // Subsequent chunks: append at the end
+        const insertAt = s.to;
+        view.dispatch({ changes: { from: insertAt, to: insertAt, insert: text } });
+        aiStreamRef.current = { ...s, to: insertAt + text.length };
+      }
     });
 
-    const finish = () => { aiStreamRef.current = null; };
+    const finish = () => {
+      aiStreamRef.current = null;
+      isFirstChunk = true;
+    };
     const offDone = bus.on('ai:stream:done', ({ id }) => { if (aiStreamRef.current?.id === id) finish(); });
     const offErr = bus.on('ai:stream:error', ({ id }) => { if (aiStreamRef.current?.id === id) finish(); });
 
@@ -363,6 +389,9 @@ export const CMEditor = function CMEditor(
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         mdLang(),
+        syntaxHighlighting(headerHighlighting),
+        headerTheme,
+        headerLinePlugin,
         EditorView.lineWrapping,
         // Keep ~72px breathing room when we scroll a position into view.
         EditorView.scrollMargins.of(() => ({ top: 72, bottom: 24 })),
@@ -501,6 +530,33 @@ export const CMEditor = function CMEditor(
               lastActiveIdRef.current = nextId;
               const heading = outlineRef.current.find(h => h.id === nextId);
               bus.emit('outline:active', { id: nextId, offset: heading?.offset ?? null, source: 'scroll' });
+            }
+          }
+
+          // Show selection popup when text is selected
+          if (u.selectionSet && !isProgrammaticSelect) {
+            const selection = u.state.selection.main;
+            if (selection.from !== selection.to) {
+              const selectedText = u.state.doc.sliceString(selection.from, selection.to);
+              if (selectedText.trim().length > 0) {
+                // Get coordinates for the popup
+                const coords = u.view.coordsAtPos(selection.to);
+                if (coords) {
+                  const hostRect = hostRef.current?.getBoundingClientRect();
+                  if (hostRect) {
+                    setSelectionPopup({
+                      top: coords.bottom - hostRect.top + 8,
+                      left: coords.left - hostRect.left,
+                      text: selectedText,
+                      from: selection.from,
+                      to: selection.to
+                    });
+                  }
+                }
+              }
+            } else {
+              setSelectionPopup(null);
+              setShowAIDropdown(false);
             }
           }
 
@@ -723,6 +779,50 @@ export const CMEditor = function CMEditor(
 
   const wrapperStyle = useMemo(() => STYLES.wrapper(narrow), [narrow]);
 
+  // AI action handlers
+  const handleMakeLonger = () => {
+    if (!selectionPopup) return;
+    const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    aiStreamRef.current = { id, from: selectionPopup.from, to: selectionPopup.to };
+    const prompt = `Rewrite the following text to be longer and more detailed. Return ONLY the rewritten text without any explanations or comments:\n\n${selectionPopup.text}`;
+    bus.emit('ai:stream:request', { id, prompt });
+    setSelectionPopup(null);
+    setShowAIDropdown(false);
+  };
+
+  const handleMakeShorter = () => {
+    if (!selectionPopup) return;
+    const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    aiStreamRef.current = { id, from: selectionPopup.from, to: selectionPopup.to };
+    const prompt = `Rewrite the following text to be shorter and more concise. Return ONLY the rewritten text without any explanations or comments:\n\n${selectionPopup.text}`;
+    bus.emit('ai:stream:request', { id, prompt });
+    setSelectionPopup(null);
+    setShowAIDropdown(false);
+  };
+
+  const handleCheckGrammar = () => {
+    if (!selectionPopup) return;
+    const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    aiStreamRef.current = { id, from: selectionPopup.from, to: selectionPopup.to };
+    const prompt = `Fix ONLY grammatical errors in the text below. DO NOT change the meaning, content, or add new information.
+
+RULES:
+1. Fix verb forms: "was go" → "went", "was close" → "was closed", "lefted" → "left"
+2. Fix subject-verb agreement: "he don't" → "he doesn't"
+3. Add missing articles/prepositions: "like go" → "like to go"
+4. Fix spelling and punctuation
+5. DO NOT change names, pronouns, or any specific content
+6. DO NOT rephrase or rewrite - only fix grammatical mistakes
+7. Keep the exact same meaning and structure
+
+Return ONLY the corrected text:
+
+${selectionPopup.text}`;
+    bus.emit('ai:stream:request', { id, prompt });
+    setSelectionPopup(null);
+    setShowAIDropdown(false);
+  };
+
   return (
     <main style={STYLES.main}>
       <div style={STYLES.container}>
@@ -758,22 +858,116 @@ export const CMEditor = function CMEditor(
               <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>
             </svg>
           </button>
-          {aiMode && aiPromptPos && (
+          {selectionPopup && (
             <div
-              className="ai-inline"
-              style={{ position: 'absolute', top: aiPromptPos.top, left: aiPromptPos.left, zIndex: 5 }}
+              style={{
+                position: 'absolute',
+                top: selectionPopup.top,
+                left: selectionPopup.left,
+                zIndex: 100,
+              }}
+              onMouseDown={(e) => e.preventDefault()}
             >
-              <input
-                ref={aiInputRef}
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.preventDefault(); submitInlinePrompt(); }
-                  if (e.key === 'Escape') { e.preventDefault(); cancelInlinePrompt(); }
+              <button
+                onClick={() => setShowAIDropdown(!showAIDropdown)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  backgroundColor: '#374151',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontWeight: 500,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease'
                 }}
-                placeholder="Ask AI… (Enter to submit, Esc to cancel)"
-                className="ai-inline-input"
-              />
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1f2937'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#374151'}
+                title="AI actions"
+              >
+                Help AI
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              {showAIDropdown && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: '4px',
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    overflow: 'hidden',
+                    minWidth: '180px'
+                  }}
+                >
+                  <button
+                    onClick={handleMakeLonger}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      backgroundColor: 'white',
+                      color: '#374151',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontWeight: 400,
+                      transition: 'background-color 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                  >
+                    Make it longer
+                  </button>
+                  <button
+                    onClick={handleMakeShorter}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      backgroundColor: 'white',
+                      color: '#374151',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontWeight: 400,
+                      transition: 'background-color 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                  >
+                    Make it shorter
+                  </button>
+                  <button
+                    onClick={handleCheckGrammar}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      backgroundColor: 'white',
+                      color: '#374151',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontWeight: 400,
+                      transition: 'background-color 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                  >
+                    Check grammar
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <div ref={hostRef} style={STYLES.editorHost} />
