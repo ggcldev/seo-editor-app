@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorState, EditorSelection, Compartment, Annotation } from "@codemirror/state";
-import { EditorView, keymap, highlightActiveLine } from "@codemirror/view";
+import { EditorView, keymap, highlightActiveLine, Decoration, ViewPlugin, DecorationSet, ViewUpdate } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import { markdown as mdLang } from "@codemirror/lang-markdown";
+import { syntaxHighlighting, HighlightStyle, syntaxTree } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete';
 import type { Heading } from "@/core/outlineParser";
 import { parseOutline } from "@/core/outlineParser";
@@ -113,6 +115,76 @@ function updateOutlineIncremental(
   return changed ? next : prev;
 }
 
+// Custom syntax highlighting for bold headers
+const headerHighlighting = HighlightStyle.define([
+  { tag: tags.heading1, fontWeight: "700", color: "#111827" },
+  { tag: tags.heading2, fontWeight: "700", color: "#1f2937" },
+  { tag: tags.heading3, fontWeight: "700", color: "#374151" },
+  { tag: tags.heading4, fontWeight: "700", color: "#4b5563" },
+  { tag: tags.heading5, fontWeight: "700", color: "#6b7280" },
+  { tag: tags.heading6, fontWeight: "700", color: "#6b7280" },
+]);
+
+// Base theme for header sizing (applied to entire lines)
+const headerTheme = EditorView.baseTheme({
+  ".cm-line.cm-h1": {
+    fontSize: "18px",
+    lineHeight: "1.6",
+    paddingTop: "4px",
+    paddingBottom: "2px"
+  },
+  ".cm-line.cm-h2": {
+    fontSize: "16px",
+    lineHeight: "1.6",
+    paddingTop: "3px",
+    paddingBottom: "1px"
+  },
+  ".cm-line.cm-h3, .cm-line.cm-h4, .cm-line.cm-h5, .cm-line.cm-h6": {
+    fontSize: "14px",
+    lineHeight: "1.6"
+  }
+});
+
+// Plugin to add heading classes to lines
+const headerLinePlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+
+  constructor(view: EditorView) {
+    this.decorations = this.buildDecorations(view);
+  }
+
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.viewportChanged) {
+      this.decorations = this.buildDecorations(update.view);
+    }
+  }
+
+  buildDecorations(view: EditorView): DecorationSet {
+    const decorations = [];
+    const tree = syntaxTree(view.state);
+
+    for (const { from, to } of view.visibleRanges) {
+      tree.iterate({
+        from,
+        to,
+        enter: (node) => {
+          if (node.name.startsWith("ATXHeading")) {
+            const level = node.name.match(/ATXHeading(\d)/)?.[1];
+            if (level) {
+              const line = view.state.doc.lineAt(node.from);
+              const deco = Decoration.line({ class: `cm-h${level}` });
+              decorations.push(deco.range(line.from));
+            }
+          }
+        }
+      });
+    }
+
+    return Decoration.set(decorations, true);
+  }
+}, {
+  decorations: v => v.decorations
+});
 
 export const CMEditor = function CMEditor(
   { markdown, setMarkdown, onCaretChange, narrow, toggleNarrow, highlightOn, toggleHighlight, onReady }: Props
@@ -317,6 +389,9 @@ export const CMEditor = function CMEditor(
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         mdLang(),
+        syntaxHighlighting(headerHighlighting),
+        headerTheme,
+        headerLinePlugin,
         EditorView.lineWrapping,
         // Keep ~72px breathing room when we scroll a position into view.
         EditorView.scrollMargins.of(() => ({ top: 72, bottom: 24 })),
